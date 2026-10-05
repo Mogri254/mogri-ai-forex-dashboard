@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MOGRI AI Forex</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">M</span><div><b>MOGRI AI</b><small>FOREX SIGNAL ANALYZER</small></div></div>
+  <span class="demo">● DEMO MODE</span>
+</header>
+
+<main>
+<section class="hero">
+  <div><p class="eyebrow">AI MARKET SCANNER</p><h1>Trade with confluence.<br><span>Wait for quality.</span></h1>
+  <p class="muted">FVG + liquidity + market structure analysis. Signals are educational and not guaranteed.</p></div>
+  <button id="scan">↻ Scan Markets</button>
+</section>
+
+<section class="stats">
+  <div><small>MARKETS SCANNED</small><strong id="scanned">6</strong></div>
+  <div><small>STRONG SETUPS</small><strong id="setups">0</strong></div>
+  <div><small>AVG CONFIDENCE</small><strong id="confidence">—</strong></div>
+</section>
+
+<section class="controls">
+  <select id="pair">
+    <option>EUR/USD</option><option>GBP/USD</option><option>USD/JPY</option>
+    <option>XAU/USD</option><option>USD/CAD</option><option>AUD/USD</option>
+  </select>
+  <select id="tf"><option>5M</option><option selected>15M</option><option>1H</option><option>4H</option></select>
+  <button id="analyze">Analyze Selected</button>
+</section>
+
+<section id="signal" class="signal empty">
+  <div class="signal-top"><span class="pill wait">WAIT</span><span id="time">--</span></div>
+  <h2>Select a market and run analysis</h2>
+  <p class="muted">The demo engine requires confluence before producing a trade idea.</p>
+</section>
+
+<section>
+<h2 class="section-title">Market Scanner</h2>
+<div id="markets" class="grid"></div>
+</section>
+
+<section class="history">
+<h2 class="section-title">Signal History</h2>
+<div id="history"></div>
+</section>
+</main>
+<footer>MOGRI AI • Demo/paper trading only • Risk management required</footer>
+<script src="app.js"></script>
+</body>
+</html>
