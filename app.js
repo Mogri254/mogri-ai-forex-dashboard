@@ -32,6 +32,50 @@ let scanRunning = false;
 
 
 // =====================================================
+// LIVE CLOCK
+// =====================================================
+
+function updateLiveClock() {
+
+  const now = new Date();
+
+  const time =
+    now.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+
+  // Look for common clock elements
+  const clockElements =
+    document.querySelectorAll(
+      "#clock, #time, .clock, .time, .current-time"
+    );
+
+  clockElements.forEach(element => {
+    element.textContent = time;
+  });
+
+}
+
+
+// =====================================================
+// START LIVE CLOCK
+// =====================================================
+
+function startLiveClock() {
+
+  updateLiveClock();
+
+  setInterval(
+    updateLiveClock,
+    1000
+  );
+
+}
+
+
+// =====================================================
 // FORMAT PRICE
 // =====================================================
 
@@ -789,16 +833,6 @@ async function scan() {
 
   try {
 
-    /*
-      Six markets = six API credits.
-
-      We do NOT automatically scan
-      when the page opens.
-
-      Cached data is reused for 60 seconds.
-    */
-
-
     for (
       const pair of markets
     ) {
@@ -1110,6 +1144,10 @@ function initializeMogriAI() {
   }
 
 
+  // Start real-time device clock
+  startLiveClock();
+
+
   // Initial status
   setStatus(
     "● LIVE DATA • PAPER MODE"
@@ -1128,6 +1166,11 @@ function initializeMogriAI() {
 
   console.log(
     "Automatic scanning: OFF."
+  );
+
+
+  console.log(
+    "Live clock: ON."
   );
 
 }
