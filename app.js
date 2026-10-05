@@ -24,11 +24,14 @@ const tfMap = {
 // SETTINGS
 // =====================================================
 
-const CACHE_TIME = 60 * 1000;
+const CACHE_TIME =
+  60 * 1000;
 
-const marketCache = new Map();
+const marketCache =
+  new Map();
 
-let scanRunning = false;
+let scanRunning =
+  false;
 
 
 // =====================================================
@@ -37,7 +40,8 @@ let scanRunning = false;
 
 function updateLiveClock() {
 
-  const now = new Date();
+  const now =
+    new Date();
 
   const time =
     now.toLocaleTimeString([], {
@@ -46,22 +50,24 @@ function updateLiveClock() {
       second: "2-digit"
     });
 
-  // Look for common clock elements
-  const clockElements =
+
+  const elements =
     document.querySelectorAll(
       "#clock, #time, .clock, .time, .current-time"
     );
 
-  clockElements.forEach(element => {
-    element.textContent = time;
-  });
+
+  elements.forEach(
+    element => {
+
+      element.textContent =
+        time;
+
+    }
+  );
 
 }
 
-
-// =====================================================
-// START LIVE CLOCK
-// =====================================================
 
 function startLiveClock() {
 
@@ -79,21 +85,37 @@ function startLiveClock() {
 // FORMAT PRICE
 // =====================================================
 
-function fmt(value, pair) {
+function fmt(
+  value,
+  pair
+) {
 
   if (
     value === undefined ||
     value === null ||
-    !Number.isFinite(Number(value))
+    !Number.isFinite(
+      Number(value)
+    )
   ) {
+
     return "—";
+
   }
 
-  if (pair === "XAU/USD") {
-    return Number(value).toFixed(2);
+
+  if (
+    pair === "XAU/USD"
+  ) {
+
+    return Number(value)
+      .toFixed(2);
+
   }
 
-  return Number(value).toFixed(5);
+
+  return Number(value)
+    .toFixed(5);
+
 }
 
 
@@ -101,76 +123,22 @@ function fmt(value, pair) {
 // STATUS
 // =====================================================
 
-function setStatus(message) {
+function setStatus(
+  message
+) {
 
   const elements =
-    document.querySelectorAll(".demo");
-
-  elements.forEach(element => {
-    element.textContent = message;
-  });
-
-}
+    document.querySelectorAll(
+      ".demo"
+    );
 
 
-// =====================================================
-// CACHE KEY
-// =====================================================
+  elements.forEach(
+    element => {
 
-function cacheKey(pair, tf) {
+      element.textContent =
+        message;
 
-  return `${pair}_${tf}`;
-
-}
-
-
-// =====================================================
-// GET CACHE
-// =====================================================
-
-function getCached(pair, tf) {
-
-  const key =
-    cacheKey(pair, tf);
-
-  const item =
-    marketCache.get(key);
-
-  if (!item) {
-    return null;
-  }
-
-  const age =
-    Date.now() - item.time;
-
-  if (age > CACHE_TIME) {
-
-    marketCache.delete(key);
-
-    return null;
-  }
-
-  console.log(
-    "Using cached data:",
-    pair,
-    tf
-  );
-
-  return item.data;
-}
-
-
-// =====================================================
-// SAVE CACHE
-// =====================================================
-
-function saveCache(pair, tf, data) {
-
-  marketCache.set(
-    cacheKey(pair, tf),
-    {
-      time: Date.now(),
-      data: data
     }
   );
 
@@ -178,18 +146,115 @@ function saveCache(pair, tf, data) {
 
 
 // =====================================================
-// LOAD MARKET DATA
+// CACHE
 // =====================================================
 
-async function analyze(pair, tf) {
+function cacheKey(
+  pair,
+  tf
+) {
+
+  return `${pair}_${tf}`;
+
+}
+
+
+function getCached(
+  pair,
+  tf
+) {
+
+  const key =
+    cacheKey(
+      pair,
+      tf
+    );
+
+
+  const item =
+    marketCache.get(
+      key
+    );
+
+
+  if (!item) {
+    return null;
+  }
+
+
+  const age =
+    Date.now() -
+    item.time;
+
+
+  if (
+    age >
+    CACHE_TIME
+  ) {
+
+    marketCache.delete(
+      key
+    );
+
+    return null;
+
+  }
+
+
+  console.log(
+    "Using cached data:",
+    pair,
+    tf
+  );
+
+
+  return item.data;
+
+}
+
+
+function saveCache(
+  pair,
+  tf,
+  data
+) {
+
+  marketCache.set(
+    cacheKey(
+      pair,
+      tf
+    ),
+    {
+      time:
+        Date.now(),
+
+      data
+    }
+  );
+
+}
+
+
+// =====================================================
+// SINGLE TIMEFRAME ANALYSIS
+// =====================================================
+
+async function analyze(
+  pair,
+  tf
+) {
 
   const interval =
-    tfMap[tf] || "15min";
+    tfMap[tf] ||
+    "15min";
 
 
-  // Check cache first
   const cached =
-    getCached(pair, tf);
+    getCached(
+      pair,
+      tf
+    );
+
 
   if (cached) {
     return cached;
@@ -197,16 +262,20 @@ async function analyze(pair, tf) {
 
 
   const key =
-    cacheKey(pair, tf);
+    cacheKey(
+      pair,
+      tf
+    );
 
 
-  // Prevent duplicate requests
   const loadingKey =
     `${key}_loading`;
 
 
   if (
-    marketCache.has(loadingKey)
+    marketCache.has(
+      loadingKey
+    )
   ) {
 
     return await marketCache.get(
@@ -221,55 +290,183 @@ async function analyze(pair, tf) {
       `/api/market?symbol=${encodeURIComponent(pair)}&interval=${encodeURIComponent(interval)}`
     )
 
-      .then(async response => {
+      .then(
+        async response => {
 
-        let data;
+          let data;
 
-        try {
 
-          data =
-            await response.json();
+          try {
 
-        } catch {
+            data =
+              await response.json();
 
-          throw new Error(
-            "Invalid response from market server."
+          } catch {
+
+            throw new Error(
+              "Invalid response from market server."
+            );
+
+          }
+
+
+          if (
+            !response.ok ||
+            data.error
+          ) {
+
+            throw new Error(
+              data.error ||
+              "Failed to load market data."
+            );
+
+          }
+
+
+          saveCache(
+            pair,
+            tf,
+            data
+          );
+
+
+          return data;
+
+        }
+      )
+
+      .finally(
+        () => {
+
+          marketCache.delete(
+            loadingKey
           );
 
         }
+      );
 
 
-        if (
-          !response.ok ||
-          data.error
-        ) {
+  marketCache.set(
+    loadingKey,
+    request
+  );
 
-          throw new Error(
-            data.error ||
-            "Failed to load market data."
+
+  return await request;
+
+}
+
+
+// =====================================================
+// MULTI-TIMEFRAME ANALYSIS
+// =====================================================
+
+async function analyzeMTF(
+  pair
+) {
+
+  const cached =
+    getCached(
+      pair,
+      "MTF"
+    );
+
+
+  if (cached) {
+
+    console.log(
+      "Using cached MTF data:",
+      pair
+    );
+
+    return cached;
+
+  }
+
+
+  const key =
+    cacheKey(
+      pair,
+      "MTF"
+    );
+
+
+  const loadingKey =
+    `${key}_loading`;
+
+
+  if (
+    marketCache.has(
+      loadingKey
+    )
+  ) {
+
+    return await marketCache.get(
+      loadingKey
+    );
+
+  }
+
+
+  const request =
+    fetch(
+      `/api/market?symbol=${encodeURIComponent(pair)}&mtf=true`
+    )
+
+      .then(
+        async response => {
+
+          let data;
+
+
+          try {
+
+            data =
+              await response.json();
+
+          } catch {
+
+            throw new Error(
+              "Invalid MTF response from market server."
+            );
+
+          }
+
+
+          if (
+            !response.ok ||
+            data.error
+          ) {
+
+            throw new Error(
+              data.error ||
+              "Multi-timeframe analysis failed."
+            );
+
+          }
+
+
+          saveCache(
+            pair,
+            "MTF",
+            data
+          );
+
+
+          return data;
+
+        }
+      )
+
+      .finally(
+        () => {
+
+          marketCache.delete(
+            loadingKey
           );
 
         }
-
-
-        saveCache(
-          pair,
-          tf,
-          data
-        );
-
-
-        return data;
-
-      })
-
-      .finally(() => {
-
-        marketCache.delete(
-          loadingKey
-        );
-
-      });
+      );
 
 
   marketCache.set(
@@ -287,10 +484,13 @@ async function analyze(pair, tf) {
 // SCANNER CARD
 // =====================================================
 
-function card(data) {
+function card(
+  data
+) {
 
   const signal =
-    data.signal || "WAIT";
+    data.signal ||
+    "WAIT";
 
 
   const className =
@@ -344,7 +544,10 @@ function card(data) {
 
         <i
           style="
-            width:${confidence}%
+            width:${Math.min(
+              confidence,
+              100
+            )}%
           "
         ></i>
 
@@ -382,10 +585,13 @@ function card(data) {
 // SHOW SIGNAL
 // =====================================================
 
-function show(data) {
+function show(
+  data
+) {
 
   const signal =
-    data.signal || "WAIT";
+    data.signal ||
+    "WAIT";
 
 
   const className =
@@ -397,7 +603,9 @@ function show(data) {
 
 
   const signalBox =
-    document.querySelector("#signal");
+    document.querySelector(
+      "#signal"
+    );
 
 
   if (!signalBox) {
@@ -423,11 +631,7 @@ function show(data) {
 
         •
 
-        ${data.tf}
-
-        •
-
-        ${data.time || ""}
+        ${data.tf || "MTF"}
 
       </span>
 
@@ -439,7 +643,8 @@ function show(data) {
       ${
         signal === "WAIT"
           ? "NO TRADE — WAIT"
-          : signal + " SETUP DETECTED"
+          : signal +
+            " SETUP DETECTED"
       }
 
     </h2>
@@ -474,11 +679,8 @@ function show(data) {
 
           ${
             signal === "WAIT"
-
               ? "—"
-
               :
-
                 fmt(
                   data.entryLow,
                   data.pair
@@ -490,7 +692,6 @@ function show(data) {
                   data.entryHigh,
                   data.pair
                 )
-
           }
 
         </b>
@@ -508,16 +709,12 @@ function show(data) {
 
           ${
             signal === "WAIT"
-
               ? "—"
-
               :
-
                 fmt(
                   data.sl,
                   data.pair
                 )
-
           }
 
         </b>
@@ -535,11 +732,8 @@ function show(data) {
 
           ${
             signal === "WAIT"
-
               ? "—"
-
               :
-
                 fmt(
                   data.tp1,
                   data.pair
@@ -558,7 +752,6 @@ function show(data) {
                   data.tp3,
                   data.pair
                 )
-
           }
 
         </b>
@@ -571,10 +764,14 @@ function show(data) {
 
     <div class="reasons">
 
-
       <span class="reason">
 
-        ${data.fvg ? "✓" : "✕"}
+        ${
+          data.m15FVG ||
+          data.fvg
+            ? "✓"
+            : "✕"
+        }
 
         Fair Value Gap
 
@@ -583,7 +780,12 @@ function show(data) {
 
       <span class="reason">
 
-        ${data.liquidity ? "✓" : "✕"}
+        ${
+          data.m5Liquidity ||
+          data.liquidity
+            ? "✓"
+            : "✕"
+        }
 
         Liquidity Sweep
 
@@ -592,7 +794,12 @@ function show(data) {
 
       <span class="reason">
 
-        ${data.structure ? "✓" : "✕"}
+        ${
+          data.h1Structure ||
+          data.structure
+            ? "✓"
+            : "✕"
+        }
 
         Market Structure
 
@@ -601,9 +808,13 @@ function show(data) {
 
       <span class="reason">
 
-        ${data.breakRetest ? "✓" : "✕"}
+        ${
+          data.m5BOS
+            ? "✓"
+            : "✕"
+        }
 
-        Breakout / Retest
+        BOS / CHOCH
 
       </span>
 
@@ -612,22 +823,29 @@ function show(data) {
 
         ${
           data.bias === "BULLISH"
-
             ? "✓ Bullish Bias"
-
             :
-
           data.bias === "BEARISH"
-
             ? "✓ Bearish Bias"
-
             :
-
             "• Neutral Bias"
         }
 
       </span>
 
+    </div>
+
+
+    <div
+      class="muted"
+      style="margin-top:12px"
+    >
+
+      MTF Score:
+      ${data.bullScore || 0}
+      Bull /
+      ${data.bearScore || 0}
+      Bear
 
     </div>
 
@@ -640,13 +858,17 @@ function show(data) {
 // SIGNAL HISTORY
 // =====================================================
 
-function history(data) {
+function history(
+  data
+) {
 
   if (
     !data ||
     data.signal === "WAIT"
   ) {
+
     return;
+
   }
 
 
@@ -683,7 +905,8 @@ function history(data) {
 
     </div>
 
-  ` + historyBox.innerHTML;
+  ` +
+  historyBox.innerHTML;
 
 }
 
@@ -692,7 +915,9 @@ function history(data) {
 // RENDER SCANNER
 // =====================================================
 
-function renderScanner(results) {
+function renderScanner(
+  results
+) {
 
   const marketsBox =
     document.querySelector(
@@ -705,7 +930,9 @@ function renderScanner(results) {
   }
 
 
-  if (!results.length) {
+  if (
+    !results.length
+  ) {
 
     marketsBox.innerHTML = `
 
@@ -716,9 +943,7 @@ function renderScanner(results) {
         </b>
 
         <p class="muted">
-
           No market data was returned.
-
         </p>
 
       </div>
@@ -726,6 +951,7 @@ function renderScanner(results) {
     `;
 
     return;
+
   }
 
 
@@ -735,7 +961,6 @@ function renderScanner(results) {
       .join("");
 
 
-  // Count BUY and SELL only
   const strongSetups =
     results.filter(
       item =>
@@ -758,7 +983,6 @@ function renderScanner(results) {
   }
 
 
-  // Average confidence
   const confidenceBox =
     document.querySelector(
       "#confidence"
@@ -771,10 +995,14 @@ function renderScanner(results) {
       Math.round(
 
         results.reduce(
-          (sum, item) =>
+          (
+            sum,
+            item
+          ) =>
             sum +
             Number(
-              item.confidence || 0
+              item.confidence ||
+              0
             ),
           0
         )
@@ -803,7 +1031,8 @@ async function scan() {
   }
 
 
-  scanRunning = true;
+  scanRunning =
+    true;
 
 
   const scanButton =
@@ -851,7 +1080,9 @@ async function scan() {
         );
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           pair,
@@ -868,7 +1099,9 @@ async function scan() {
     );
 
 
-    if (results.length) {
+    if (
+      results.length
+    ) {
 
       setStatus(
         "● LIVE DATA • PAPER MODE"
@@ -883,7 +1116,9 @@ async function scan() {
     }
 
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
 
     console.error(
       error
@@ -893,7 +1128,6 @@ async function scan() {
     setStatus(
       "● DATA ERROR"
     );
-
 
   } finally {
 
@@ -940,7 +1174,10 @@ async function analyzeSelected() {
     );
 
 
-  if (!pairElement || !tfElement) {
+  if (
+    !pairElement ||
+    !tfElement
+  ) {
 
     console.error(
       "Pair or timeframe selector not found."
@@ -977,17 +1214,35 @@ async function analyzeSelected() {
 
 
   setStatus(
-    "● CHECKING LIVE DATA • PAPER MODE"
+    "● CHECKING MTF DATA • PAPER MODE"
   );
 
 
   try {
 
+    /*
+    Selected analysis uses
+    the complete 4H → 1H → 15M → 5M
+    engine.
+
+    The selected dropdown timeframe
+    remains visible in the UI,
+    but the signal itself uses MTF.
+    */
+
     const data =
-      await analyze(
-        pair,
-        tf
+      await analyzeMTF(
+        pair
       );
+
+
+    /*
+    Keep selected timeframe visible
+    if the backend returns MTF.
+    */
+
+    data.displayTf =
+      tf;
 
 
     show(
@@ -1001,11 +1256,13 @@ async function analyzeSelected() {
 
 
     setStatus(
-      "● LIVE DATA • PAPER MODE"
+      "● LIVE MTF DATA • PAPER MODE"
     );
 
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
 
     console.error(
       error
@@ -1035,9 +1292,7 @@ async function analyzeSelected() {
 
 
         <p class="muted">
-
           ${error.message}
-
         </p>
 
 
@@ -1045,7 +1300,7 @@ async function analyzeSelected() {
 
           If you have reached the
           Twelve Data API limit,
-          wait for the next minute
+          wait for the quota to reset
           before trying again.
 
         </p>
@@ -1078,7 +1333,7 @@ async function analyzeSelected() {
 
 
 // =====================================================
-// CONNECT BUTTONS AFTER PAGE LOAD
+// CONNECT BUTTONS
 // =====================================================
 
 function initializeMogriAI() {
@@ -1100,7 +1355,6 @@ function initializeMogriAI() {
     );
 
 
-  // Scan button
   if (scanButton) {
 
     scanButton.addEventListener(
@@ -1122,7 +1376,6 @@ function initializeMogriAI() {
   }
 
 
-  // Analyze button
   if (analyzeButton) {
 
     analyzeButton.addEventListener(
@@ -1144,11 +1397,9 @@ function initializeMogriAI() {
   }
 
 
-  // Start real-time device clock
   startLiveClock();
 
 
-  // Initial status
   setStatus(
     "● LIVE DATA • PAPER MODE"
   );
@@ -1160,12 +1411,17 @@ function initializeMogriAI() {
 
 
   console.log(
-    "Market data cache: 60 seconds."
+    "Market cache: 60 seconds."
   );
 
 
   console.log(
     "Automatic scanning: OFF."
+  );
+
+
+  console.log(
+    "Selected analysis: MTF ON."
   );
 
 
