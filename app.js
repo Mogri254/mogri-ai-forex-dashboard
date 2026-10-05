@@ -1,3 +1,8 @@
+// =====================================================
+// MOGRI AI FOREX SIGNAL ANALYZER
+// LIVE MARKET DATA • PAPER MODE
+// =====================================================
+
 const markets = [
   "EUR/USD",
   "GBP/USD",
@@ -14,9 +19,9 @@ const tfMap = {
   "4H": "4h"
 };
 
+
 // =====================================================
-// MOGRI AI - MARKET DATA CACHE
-// Keeps results for 60 seconds so we don't waste API calls
+// SETTINGS
 // =====================================================
 
 const CACHE_TIME = 60 * 1000;
@@ -24,54 +29,75 @@ const CACHE_TIME = 60 * 1000;
 const marketCache = new Map();
 
 let scanRunning = false;
-let lastScanTime = 0;
 
 
 // =====================================================
-// HELPERS
+// FORMAT PRICE
 // =====================================================
 
-function fmt(x, pair) {
+function fmt(value, pair) {
 
-  if (x === undefined || x === null || !Number.isFinite(Number(x))) {
+  if (
+    value === undefined ||
+    value === null ||
+    !Number.isFinite(Number(value))
+  ) {
     return "—";
   }
 
-  return pair === "XAU/USD"
-    ? Number(x).toFixed(2)
-    : Number(x).toFixed(5);
+  if (pair === "XAU/USD") {
+    return Number(value).toFixed(2);
+  }
+
+  return Number(value).toFixed(5);
 }
 
+
+// =====================================================
+// STATUS
+// =====================================================
 
 function setStatus(message) {
 
-  const e = document.querySelector(".demo");
+  const elements =
+    document.querySelectorAll(".demo");
 
-  if (e) {
-    e.textContent = message;
-  }
+  elements.forEach(element => {
+    element.textContent = message;
+  });
+
 }
 
 
 // =====================================================
-// API CACHE
+// CACHE KEY
 // =====================================================
 
 function cacheKey(pair, tf) {
+
   return `${pair}_${tf}`;
+
 }
 
 
+// =====================================================
+// GET CACHE
+// =====================================================
+
 function getCached(pair, tf) {
 
-  const key = cacheKey(pair, tf);
-  const item = marketCache.get(key);
+  const key =
+    cacheKey(pair, tf);
+
+  const item =
+    marketCache.get(key);
 
   if (!item) {
     return null;
   }
 
-  const age = Date.now() - item.time;
+  const age =
+    Date.now() - item.time;
 
   if (age > CACHE_TIME) {
 
@@ -80,9 +106,19 @@ function getCached(pair, tf) {
     return null;
   }
 
+  console.log(
+    "Using cached data:",
+    pair,
+    tf
+  );
+
   return item.data;
 }
 
+
+// =====================================================
+// SAVE CACHE
+// =====================================================
 
 function saveCache(pair, tf, data) {
 
@@ -90,95 +126,116 @@ function saveCache(pair, tf, data) {
     cacheKey(pair, tf),
     {
       time: Date.now(),
-      data
+      data: data
     }
   );
+
 }
 
 
 // =====================================================
-// MARKET DATA
+// LOAD MARKET DATA
 // =====================================================
 
 async function analyze(pair, tf) {
 
-  const interval = tfMap[tf] || "15min";
+  const interval =
+    tfMap[tf] || "15min";
 
-  // First check cache
-  const cached = getCached(pair, tf);
+
+  // Check cache first
+  const cached =
+    getCached(pair, tf);
 
   if (cached) {
-
-    console.log(
-      "CACHE:",
-      pair,
-      tf
-    );
-
     return cached;
   }
 
 
-  // Prevent duplicate requests
-  const key = cacheKey(pair, tf);
+  const key =
+    cacheKey(pair, tf);
 
-  if (marketCache.has(`${key}_loading`)) {
+
+  // Prevent duplicate requests
+  const loadingKey =
+    `${key}_loading`;
+
+
+  if (
+    marketCache.has(loadingKey)
+  ) {
 
     return await marketCache.get(
-      `${key}_loading`
+      loadingKey
     );
+
   }
 
 
-  const request = fetch(
-    `/api/market?symbol=${encodeURIComponent(pair)}&interval=${encodeURIComponent(interval)}`
-  )
-    .then(async response => {
+  const request =
+    fetch(
+      `/api/market?symbol=${encodeURIComponent(pair)}&interval=${encodeURIComponent(interval)}`
+    )
 
-      let data;
+      .then(async response => {
 
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error(
-          "Invalid response from server."
+        let data;
+
+        try {
+
+          data =
+            await response.json();
+
+        } catch {
+
+          throw new Error(
+            "Invalid response from market server."
+          );
+
+        }
+
+
+        if (
+          !response.ok ||
+          data.error
+        ) {
+
+          throw new Error(
+            data.error ||
+            "Failed to load market data."
+          );
+
+        }
+
+
+        saveCache(
+          pair,
+          tf,
+          data
         );
-      }
 
 
-      if (!response.ok || data.error) {
+        return data;
 
-        throw new Error(
-          data.error ||
-          "Failed to load market data."
+      })
+
+      .finally(() => {
+
+        marketCache.delete(
+          loadingKey
         );
-      }
 
-
-      saveCache(
-        pair,
-        tf,
-        data
-      );
-
-      return data;
-
-    })
-    .finally(() => {
-
-      marketCache.delete(
-        `${key}_loading`
-      );
-
-    });
+      });
 
 
   marketCache.set(
-    `${key}_loading`,
+    loadingKey,
     request
   );
 
+
   return await request;
+
 }
 
 
@@ -186,17 +243,24 @@ async function analyze(pair, tf) {
 // SCANNER CARD
 // =====================================================
 
-function card(x) {
+function card(data) {
 
   const signal =
-    x.signal || "WAIT";
+    data.signal || "WAIT";
 
-  const c =
+
+  const className =
     signal === "BUY"
       ? "buy"
       : signal === "SELL"
       ? "sell"
       : "wait";
+
+
+  const confidence =
+    Number(
+      data.confidence || 0
+    );
 
 
   return `
@@ -205,9 +269,11 @@ function card(x) {
 
       <div class="pairrow">
 
-        <b>${x.pair}</b>
+        <b>
+          ${data.pair}
+        </b>
 
-        <span class="pill ${c}">
+        <span class="pill ${className}">
           ${signal}
         </span>
 
@@ -216,7 +282,7 @@ function card(x) {
 
       <h3>
 
-        ${x.confidence || 0}%
+        ${confidence}%
 
         <span
           style="
@@ -234,7 +300,7 @@ function card(x) {
 
         <i
           style="
-            width:${x.confidence || 0}%
+            width:${confidence}%
           "
         ></i>
 
@@ -244,18 +310,18 @@ function card(x) {
       <div class="mini">
 
         <span>
-          ${x.tf || "15min"}
+          ${data.tf || "15min"}
         </span>
 
         <span>
 
           FVG
-          ${x.fvg ? "✓" : "—"}
+          ${data.fvg ? "✓" : "—"}
 
           •
 
           LIQ
-          ${x.liquidity ? "✓" : "—"}
+          ${data.liquidity ? "✓" : "—"}
 
         </span>
 
@@ -264,19 +330,21 @@ function card(x) {
     </div>
 
   `;
+
 }
 
 
 // =====================================================
-// SHOW SELECTED SIGNAL
+// SHOW SIGNAL
 // =====================================================
 
-function show(x) {
+function show(data) {
 
   const signal =
-    x.signal || "WAIT";
+    data.signal || "WAIT";
 
-  const c =
+
+  const className =
     signal === "BUY"
       ? "buy"
       : signal === "SELL"
@@ -293,23 +361,30 @@ function show(x) {
   }
 
 
-  signalBox.className = "signal";
+  signalBox.className =
+    "signal";
 
 
   signalBox.innerHTML = `
 
     <div class="signal-top">
 
-      <span class="pill ${c}">
+      <span class="pill ${className}">
         ${signal}
       </span>
 
       <span>
-        ${x.pair}
+
+        ${data.pair}
+
         •
-        ${x.tf}
+
+        ${data.tf}
+
         •
-        ${x.time || ""}
+
+        ${data.time || ""}
+
       </span>
 
     </div>
@@ -320,7 +395,7 @@ function show(x) {
       ${
         signal === "WAIT"
           ? "NO TRADE — WAIT"
-          : signal + " setup detected"
+          : signal + " SETUP DETECTED"
       }
 
     </h2>
@@ -336,7 +411,10 @@ function show(x) {
         </small>
 
         <b>
-          ${fmt(x.price, x.pair)}
+          ${fmt(
+            data.price,
+            data.pair
+          )}
         </b>
 
       </div>
@@ -352,19 +430,23 @@ function show(x) {
 
           ${
             signal === "WAIT"
+
               ? "—"
+
               :
+
                 fmt(
-                  x.entryLow,
-                  x.pair
+                  data.entryLow,
+                  data.pair
                 )
                 +
                 " – "
                 +
                 fmt(
-                  x.entryHigh,
-                  x.pair
+                  data.entryHigh,
+                  data.pair
                 )
+
           }
 
         </b>
@@ -382,11 +464,16 @@ function show(x) {
 
           ${
             signal === "WAIT"
+
               ? "—"
-              : fmt(
-                  x.sl,
-                  x.pair
+
+              :
+
+                fmt(
+                  data.sl,
+                  data.pair
                 )
+
           }
 
         </b>
@@ -404,22 +491,36 @@ function show(x) {
 
           ${
             signal === "WAIT"
+
               ? "—"
+
               :
-                fmt(x.tp1, x.pair)
+
+                fmt(
+                  data.tp1,
+                  data.pair
+                )
                 +
                 " / "
                 +
-                fmt(x.tp2, x.pair)
+                fmt(
+                  data.tp2,
+                  data.pair
+                )
                 +
                 " / "
                 +
-                fmt(x.tp3, x.pair)
+                fmt(
+                  data.tp3,
+                  data.pair
+                )
+
           }
 
         </b>
 
       </div>
+
 
     </div>
 
@@ -429,7 +530,7 @@ function show(x) {
 
       <span class="reason">
 
-        ${x.fvg ? "✓" : "✕"}
+        ${data.fvg ? "✓" : "✕"}
 
         Fair Value Gap
 
@@ -438,27 +539,27 @@ function show(x) {
 
       <span class="reason">
 
-        ${x.liquidity ? "✓" : "✕"}
+        ${data.liquidity ? "✓" : "✕"}
 
-        Liquidity sweep
-
-      </span>
-
-
-      <span class="reason">
-
-        ${x.structure ? "✓" : "✕"}
-
-        Market structure
+        Liquidity Sweep
 
       </span>
 
 
       <span class="reason">
 
-        ${x.breakRetest ? "✓" : "✕"}
+        ${data.structure ? "✓" : "✕"}
 
-        Breakout / retest
+        Market Structure
+
+      </span>
+
+
+      <span class="reason">
+
+        ${data.breakRetest ? "✓" : "✕"}
+
+        Breakout / Retest
 
       </span>
 
@@ -466,13 +567,19 @@ function show(x) {
       <span class="reason">
 
         ${
-          x.bias === "BULLISH"
-            ? "✓ Bullish bias"
+          data.bias === "BULLISH"
+
+            ? "✓ Bullish Bias"
+
             :
-          x.bias === "BEARISH"
-            ? "✓ Bearish bias"
+
+          data.bias === "BEARISH"
+
+            ? "✓ Bearish Bias"
+
             :
-            "• Neutral bias"
+
+            "• Neutral Bias"
         }
 
       </span>
@@ -481,52 +588,59 @@ function show(x) {
     </div>
 
   `;
+
 }
 
 
 // =====================================================
-// HISTORY
+// SIGNAL HISTORY
 // =====================================================
 
-function history(x) {
+function history(data) {
 
-  if (!x || x.signal === "WAIT") {
+  if (
+    !data ||
+    data.signal === "WAIT"
+  ) {
     return;
   }
 
 
-  const e =
-    document.querySelector("#history");
+  const historyBox =
+    document.querySelector(
+      "#history"
+    );
 
 
-  if (!e) {
+  if (!historyBox) {
     return;
   }
 
 
-  e.innerHTML = `
+  historyBox.innerHTML = `
 
     <div class="row">
 
       <b>
-        ${x.pair}
+        ${data.pair}
       </b>
 
       <span>
-        ${x.signal}
+        ${data.signal}
       </span>
 
       <span>
-        ${x.confidence}%
+        ${data.confidence}%
       </span>
 
       <span>
-        ${x.time || ""}
+        ${data.time || ""}
       </span>
 
     </div>
 
-  ` + e.innerHTML;
+  ` + historyBox.innerHTML;
+
 }
 
 
@@ -536,18 +650,20 @@ function history(x) {
 
 function renderScanner(results) {
 
-  const box =
-    document.querySelector("#markets");
+  const marketsBox =
+    document.querySelector(
+      "#markets"
+    );
 
 
-  if (!box) {
+  if (!marketsBox) {
     return;
   }
 
 
   if (!results.length) {
 
-    box.innerHTML = `
+    marketsBox.innerHTML = `
 
       <div class="card">
 
@@ -569,54 +685,71 @@ function renderScanner(results) {
   }
 
 
-  box.innerHTML =
+  marketsBox.innerHTML =
     results
       .map(card)
       .join("");
 
 
-  const strong =
+  // Count BUY and SELL only
+  const strongSetups =
     results.filter(
-      x =>
-        x.signal === "BUY" ||
-        x.signal === "SELL"
+      item =>
+        item.signal === "BUY" ||
+        item.signal === "SELL"
     );
 
 
-  const setupBox =
-    document.querySelector("#setups");
+  const setupsBox =
+    document.querySelector(
+      "#setups"
+    );
 
 
-  if (setupBox) {
-    setupBox.textContent =
-      strong.length;
+  if (setupsBox) {
+
+    setupsBox.textContent =
+      strongSetups.length;
+
   }
 
 
+  // Average confidence
   const confidenceBox =
-    document.querySelector("#confidence");
+    document.querySelector(
+      "#confidence"
+    );
 
 
   if (confidenceBox) {
 
-    confidenceBox.textContent =
+    const average =
       Math.round(
+
         results.reduce(
-          (sum, x) =>
+          (sum, item) =>
             sum +
             Number(
-              x.confidence || 0
+              item.confidence || 0
             ),
           0
-        ) /
+        )
+        /
         results.length
-      ) + "%";
+
+      );
+
+
+    confidenceBox.textContent =
+      average + "%";
+
   }
+
 }
 
 
 // =====================================================
-// SCAN MARKETS
+// SCAN ALL MARKETS
 // =====================================================
 
 async function scan() {
@@ -629,20 +762,26 @@ async function scan() {
   scanRunning = true;
 
 
+  const scanButton =
+    document.querySelector(
+      "#scan"
+    );
+
+
+  if (scanButton) {
+
+    scanButton.disabled =
+      true;
+
+    scanButton.textContent =
+      "Scanning…";
+
+  }
+
+
   setStatus(
     "● SCANNING LIVE DATA • PAPER MODE"
   );
-
-
-  const button =
-    document.querySelector("#scan");
-
-
-  if (button) {
-    button.disabled = true;
-    button.textContent =
-      "Scanning…";
-  }
 
 
   const results = [];
@@ -651,20 +790,18 @@ async function scan() {
   try {
 
     /*
-      IMPORTANT:
+      Six markets = six API credits.
 
-      We scan only once.
+      We do NOT automatically scan
+      when the page opens.
 
-      Each market costs approximately
-      1 Twelve Data API credit.
-
-      Free plan = 8 credits/minute.
-
-      6 markets = 6 credits.
+      Cached data is reused for 60 seconds.
     */
 
 
-    for (const pair of markets) {
+    for (
+      const pair of markets
+    ) {
 
       try {
 
@@ -675,7 +812,9 @@ async function scan() {
           );
 
 
-        results.push(data);
+        results.push(
+          data
+        );
 
 
       } catch (error) {
@@ -686,24 +825,35 @@ async function scan() {
         );
 
       }
+
     }
 
 
-    renderScanner(results);
-
-
-    lastScanTime =
-      Date.now();
-
-
-    setStatus(
-      "● LIVE DATA • PAPER MODE"
+    renderScanner(
+      results
     );
+
+
+    if (results.length) {
+
+      setStatus(
+        "● LIVE DATA • PAPER MODE"
+      );
+
+    } else {
+
+      setStatus(
+        "● DATA UNAVAILABLE"
+      );
+
+    }
 
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      error
+    );
 
 
     setStatus(
@@ -713,60 +863,91 @@ async function scan() {
 
   } finally {
 
-    scanRunning = false;
+    scanRunning =
+      false;
 
 
-    if (button) {
+    if (scanButton) {
 
-      button.disabled = false;
+      scanButton.disabled =
+        false;
 
-      button.textContent =
+      scanButton.textContent =
         "↻ Scan Markets";
 
     }
 
   }
+
 }
 
 
 // =====================================================
-// ANALYZE SELECTED
+// ANALYZE SELECTED MARKET
 // =====================================================
 
 async function analyzeSelected() {
 
-  const button =
-    document.querySelector("#analyze");
+  const pairElement =
+    document.querySelector(
+      "#pair"
+    );
 
 
-  const pair =
-    document.querySelector("#pair").value;
+  const tfElement =
+    document.querySelector(
+      "#tf"
+    );
 
 
-  const tf =
-    document.querySelector("#tf").value;
+  const signalBox =
+    document.querySelector(
+      "#signal"
+    );
 
 
-  if (button) {
+  if (!pairElement || !tfElement) {
 
-    button.disabled = true;
+    console.error(
+      "Pair or timeframe selector not found."
+    );
 
-    button.textContent =
-      "Checking…";
+    return;
 
   }
 
 
+  const pair =
+    pairElement.value;
+
+
+  const tf =
+    tfElement.value;
+
+
+  const analyzeButton =
+    document.querySelector(
+      "#analyze"
+    );
+
+
+  if (analyzeButton) {
+
+    analyzeButton.disabled =
+      true;
+
+    analyzeButton.textContent =
+      "Analyzing…";
+
+  }
+
+
+  setStatus(
+    "● CHECKING LIVE DATA • PAPER MODE"
+  );
+
+
   try {
-
-    /*
-      If the selected pair was already
-      scanned within 60 seconds,
-      this uses CACHE.
-
-      It does NOT call Twelve Data again.
-    */
-
 
     const data =
       await analyze(
@@ -775,9 +956,14 @@ async function analyzeSelected() {
       );
 
 
-    show(data);
+    show(
+      data
+    );
 
-    history(data);
+
+    history(
+      data
+    );
 
 
     setStatus(
@@ -787,28 +973,30 @@ async function analyzeSelected() {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      error
+    );
 
 
-    const box =
-      document.querySelector("#signal");
+    if (signalBox) {
+
+      signalBox.className =
+        "signal";
 
 
-    if (box) {
-
-      box.innerHTML = `
+      signalBox.innerHTML = `
 
         <div class="signal-top">
 
           <span class="pill wait">
-            DATA LIMIT
+            DATA ERROR
           </span>
 
         </div>
 
 
         <h2>
-          Market data unavailable
+          Failed to load data
         </h2>
 
 
@@ -821,9 +1009,10 @@ async function analyzeSelected() {
 
         <p class="muted">
 
-          Please wait for the API
-          credit limit to reset,
-          then try again.
+          If you have reached the
+          Twelve Data API limit,
+          wait for the next minute
+          before trying again.
 
         </p>
 
@@ -833,70 +1022,133 @@ async function analyzeSelected() {
 
 
     setStatus(
-      "● WAITING FOR API LIMIT"
+      "● API LIMIT / DATA ERROR"
     );
 
 
   } finally {
 
-    if (button) {
+    if (analyzeButton) {
 
-      button.disabled = false;
+      analyzeButton.disabled =
+        false;
 
-      button.textContent =
+      analyzeButton.textContent =
         "Analyze Selected";
 
     }
 
   }
-}
-
-
-// =====================================================
-// BUTTONS
-// =====================================================
-
-const scanButton =
-  document.querySelector("#scan");
-
-
-if (scanButton) {
-
-  scanButton.onclick =
-    scan;
-
-}
-
-
-const analyzeButton =
-  document.querySelector("#analyze");
-
-
-if (analyzeButton) {
-
-  analyzeButton.onclick =
-    analyzeSelected;
 
 }
 
 
 // =====================================================
-// INITIAL LOAD
+// CONNECT BUTTONS AFTER PAGE LOAD
 // =====================================================
 
-setStatus(
-  "● LIVE DATA • PAPER MODE"
-);
+function initializeMogriAI() {
+
+  console.log(
+    "MOGRI AI starting..."
+  );
 
 
-// Don't automatically scan on page load.
-// User chooses when to scan.
-//
-// This saves API credits.
+  const scanButton =
+    document.querySelector(
+      "#scan"
+    );
 
-console.log(
-  "MOGRI AI initialized."
-);
 
-console.log(
-  "API calls are cached for 60 seconds."
+  const analyzeButton =
+    document.querySelector(
+      "#analyze"
+    );
+
+
+  // Scan button
+  if (scanButton) {
+
+    scanButton.addEventListener(
+      "click",
+      scan
+    );
+
+
+    console.log(
+      "Scan button connected."
+    );
+
+  } else {
+
+    console.error(
+      "Scan button #scan not found."
+    );
+
+  }
+
+
+  // Analyze button
+  if (analyzeButton) {
+
+    analyzeButton.addEventListener(
+      "click",
+      analyzeSelected
+    );
+
+
+    console.log(
+      "Analyze button connected."
+    );
+
+  } else {
+
+    console.error(
+      "Analyze button #analyze not found."
+    );
+
+  }
+
+
+  // Initial status
+  setStatus(
+    "● LIVE DATA • PAPER MODE"
+  );
+
+
+  console.log(
+    "MOGRI AI initialized."
+  );
+
+
+  console.log(
+    "Market data cache: 60 seconds."
+  );
+
+
+  console.log(
+    "Automatic scanning: OFF."
+  );
+
+}
+
+
+// =====================================================
+// PAGE LOAD
+// =====================================================
+
+if (
+  document.readyState ===
+  "loading"
+) {
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    initializeMogriAI
+  );
+
+} else {
+
+  initializeMogriAI();
+
+}
