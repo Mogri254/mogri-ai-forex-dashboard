@@ -1,7 +1,8 @@
 // =====================================================
 // MOGRI AI FOREX SIGNAL ANALYZER
-// LIVE MARKET DATA • PAPER MODE
+// LIVE MARKET DATA • PAPER / DEMO / REAL MODE
 // =====================================================
+
 
 const markets = [
   "EUR/USD",
@@ -11,6 +12,7 @@ const markets = [
   "USD/CAD",
   "AUD/USD"
 ];
+
 
 const tfMap = {
   "5M": "5min",
@@ -24,14 +26,218 @@ const tfMap = {
 // SETTINGS
 // =====================================================
 
-const CACHE_TIME =
-  60 * 1000;
+const CACHE_TIME = 60 * 1000;
 
-const marketCache =
-  new Map();
+const marketCache = new Map();
 
-let scanRunning =
-  false;
+let scanRunning = false;
+
+
+// =====================================================
+// TRADING MODE
+// =====================================================
+
+const TRADING_MODES = [
+  "MANUAL",
+  "DEMO",
+  "REAL"
+];
+
+
+function getTradingMode() {
+
+  const saved =
+    localStorage.getItem(
+      "mogriTradingMode"
+    );
+
+  if (
+    TRADING_MODES.includes(saved)
+  ) {
+
+    return saved;
+
+  }
+
+  return "DEMO";
+
+}
+
+
+function setTradingMode(mode) {
+
+  if (
+    !TRADING_MODES.includes(mode)
+  ) {
+
+    return;
+
+  }
+
+
+  if (mode === "REAL") {
+
+    const confirmed =
+      confirm(
+        "REAL MODE WARNING\n\n" +
+        "This mode is intended for real-money trading.\n\n" +
+        "Do you want to enable REAL mode?"
+      );
+
+
+    if (!confirmed) {
+
+      updateTradingModeUI();
+
+      return;
+
+    }
+
+  }
+
+
+  localStorage.setItem(
+    "mogriTradingMode",
+    mode
+  );
+
+
+  updateTradingModeUI();
+
+
+  setStatus(
+    `● LIVE DATA • ${mode} MODE`
+  );
+
+}
+
+
+function updateTradingModeUI() {
+
+  let selector =
+    document.querySelector(
+      "#mogriTradingMode"
+    );
+
+
+  if (!selector) {
+
+    const signalBox =
+      document.querySelector(
+        "#signal"
+      );
+
+
+    if (!signalBox) {
+
+      return;
+
+    }
+
+
+    const wrapper =
+      document.createElement(
+        "div"
+      );
+
+
+    wrapper.id =
+      "mogriModeWrapper";
+
+
+    wrapper.style =
+      `
+        margin-bottom:12px;
+        padding:10px;
+        border-radius:10px;
+        background:rgba(255,255,255,.04);
+      `;
+
+
+    wrapper.innerHTML = `
+
+      <label
+        style="
+          display:block;
+          font-size:11px;
+          color:#8b96a8;
+          margin-bottom:5px;
+        "
+      >
+        TRADING MODE
+      </label>
+
+      <select
+        id="mogriTradingMode"
+        style="
+          width:100%;
+          padding:10px;
+          border-radius:8px;
+          border:1px solid rgba(255,255,255,.1);
+          background:#111827;
+          color:white;
+        "
+      >
+
+        <option value="MANUAL">
+          MANUAL
+        </option>
+
+        <option value="DEMO">
+          DEMO
+        </option>
+
+        <option value="REAL">
+          REAL
+        </option>
+
+      </select>
+
+    `;
+
+
+    signalBox.parentNode.insertBefore(
+      wrapper,
+      signalBox
+    );
+
+
+    selector =
+      document.querySelector(
+        "#mogriTradingMode"
+      );
+
+
+    if (selector) {
+
+      selector.addEventListener(
+        "change",
+        () => {
+
+          setTradingMode(
+            selector.value
+          );
+
+        }
+      );
+
+    }
+
+  }
+
+
+  const mode =
+    getTradingMode();
+
+
+  if (selector) {
+
+    selector.value =
+      mode;
+
+  }
+
+}
 
 
 // =====================================================
@@ -43,12 +249,16 @@ function updateLiveClock() {
   const now =
     new Date();
 
+
   const time =
-    now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
+    now.toLocaleTimeString(
+      [],
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }
+    );
 
 
   const elements =
@@ -72,6 +282,7 @@ function updateLiveClock() {
 function startLiveClock() {
 
   updateLiveClock();
+
 
   setInterval(
     updateLiveClock,
@@ -178,7 +389,9 @@ function getCached(
 
 
   if (!item) {
+
     return null;
+
   }
 
 
@@ -225,12 +438,59 @@ function saveCache(
       tf
     ),
     {
-      time:
-        Date.now(),
-
+      time: Date.now(),
       data
     }
   );
+
+}
+
+
+// =====================================================
+// CONDITION HELPER
+// =====================================================
+
+function conditionExists(
+  value
+) {
+
+  if (
+    value === undefined ||
+    value === null ||
+    value === false
+  ) {
+
+    return false;
+
+  }
+
+
+  if (
+    typeof value === "string"
+  ) {
+
+    const normalized =
+      value
+        .trim()
+        .toUpperCase();
+
+
+    if (
+      normalized === "" ||
+      normalized === "NONE" ||
+      normalized === "NEUTRAL" ||
+      normalized === "NO" ||
+      normalized === "FALSE"
+    ) {
+
+      return false;
+
+    }
+
+  }
+
+
+  return true;
 
 }
 
@@ -257,7 +517,9 @@ async function analyze(
 
 
   if (cached) {
+
     return cached;
+
   }
 
 
@@ -379,6 +641,7 @@ async function analyzeMTF(
       pair
     );
 
+
     return cached;
 
   }
@@ -481,6 +744,283 @@ async function analyzeMTF(
 
 
 // =====================================================
+// ORDER BLOCK INFORMATION
+// =====================================================
+
+function getOBType(
+  data
+) {
+
+  return (
+    data.m5OBType ||
+    data.obType ||
+    "NONE"
+  );
+
+}
+
+
+function getOBStatus(
+  data
+) {
+
+  return (
+    data.m5OBStatus ||
+    data.obStatus ||
+    "NONE"
+  );
+
+}
+
+
+function getOBHigh(
+  data
+) {
+
+  return (
+    data.m5OBHigh ??
+    data.obHigh ??
+    null
+  );
+
+}
+
+
+function getOBLow(
+  data
+) {
+
+  return (
+    data.m5OBLow ??
+    data.obLow ??
+    null
+  );
+
+}
+
+
+function getOBStrength(
+  data
+) {
+
+  return (
+    data.m5OBStrength ??
+    data.obStrength ??
+    null
+  );
+
+}
+
+
+function orderBlockHTML(
+  data
+) {
+
+  const type =
+    getOBType(data);
+
+
+  const status =
+    getOBStatus(data);
+
+
+  const high =
+    getOBHigh(data);
+
+
+  const low =
+    getOBLow(data);
+
+
+  const strength =
+    getOBStrength(data);
+
+
+  const hasOB =
+    type === "BULLISH" ||
+    type === "BEARISH";
+
+
+  let message =
+    "No confirmed Order Block";
+
+
+  if (hasOB) {
+
+    if (
+      status === "IN_ZONE"
+    ) {
+
+      message =
+        "PRICE INSIDE ORDER BLOCK";
+
+    } else if (
+      status === "ABOVE_ZONE"
+    ) {
+
+      message =
+        "WAITING FOR OB RETEST";
+
+    } else if (
+      status === "BELOW_ZONE"
+    ) {
+
+      message =
+        "WAITING FOR OB RETEST";
+
+    } else if (
+      status === "AWAY"
+    ) {
+
+      message =
+        "ORDER BLOCK AWAY FROM PRICE";
+
+    } else {
+
+      message =
+        "ORDER BLOCK DETECTED";
+
+    }
+
+  }
+
+
+  return `
+
+    <div
+      class="ob-panel"
+      style="
+        margin-top:14px;
+        padding:12px;
+        border-radius:10px;
+        border:1px solid rgba(255,255,255,.08);
+        background:rgba(255,255,255,.025);
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          gap:10px;
+          align-items:center;
+          margin-bottom:8px;
+        "
+      >
+
+        <b>
+          ORDER BLOCK
+        </b>
+
+        <span
+          class="pill ${
+            type === "BULLISH"
+              ? "buy"
+              :
+            type === "BEARISH"
+              ? "sell"
+              : "wait"
+          }"
+        >
+          ${hasOB ? type : "NONE"}
+        </span>
+
+      </div>
+
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
+          gap:8px;
+        "
+      >
+
+        <div>
+
+          <small>
+            OB HIGH
+          </small>
+
+          <br>
+
+          <b>
+            ${fmt(high, data.pair)}
+          </b>
+
+        </div>
+
+
+        <div>
+
+          <small>
+            OB LOW
+          </small>
+
+          <br>
+
+          <b>
+            ${fmt(low, data.pair)}
+          </b>
+
+        </div>
+
+
+        <div>
+
+          <small>
+            STATUS
+          </small>
+
+          <br>
+
+          <b>
+            ${status}
+          </b>
+
+        </div>
+
+
+        <div>
+
+          <small>
+            STRENGTH
+          </small>
+
+          <br>
+
+          <b>
+            ${
+              strength === null ||
+              strength === undefined
+                ? "—"
+                : strength
+            }
+          </b>
+
+        </div>
+
+      </div>
+
+
+      <div
+        class="muted"
+        style="margin-top:10px"
+      >
+
+        ${message}
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+// =====================================================
 // SCANNER CARD
 // =====================================================
 
@@ -505,6 +1045,18 @@ function card(
     Number(
       data.confidence || 0
     );
+
+
+  const obType =
+    data.m5OBType ||
+    data.obType ||
+    "NONE";
+
+
+  const obStatus =
+    data.m5OBStatus ||
+    data.obStatus ||
+    "NONE";
 
 
   return `
@@ -563,13 +1115,42 @@ function card(
         <span>
 
           FVG
-          ${data.fvg ? "✓" : "—"}
+          ${
+            conditionExists(
+              data.fvg
+            )
+              ? "✓"
+              : "—"
+          }
 
           •
 
           LIQ
-          ${data.liquidity ? "✓" : "—"}
+          ${
+            conditionExists(
+              data.liquidity
+            )
+              ? "✓"
+              : "—"
+          }
 
+        </span>
+
+      </div>
+
+
+      <div
+        class="mini"
+        style="margin-top:7px"
+      >
+
+        <span>
+          OB:
+          ${obType}
+        </span>
+
+        <span>
+          ${obStatus}
         </span>
 
       </div>
@@ -582,272 +1163,60 @@ function card(
 
 
 // =====================================================
-// SHOW SIGNAL
+// PLACE TRADE BUTTON
 // =====================================================
 
-function show(
+function createTradeButton(
   data
 ) {
 
   const signal =
-    data.signal ||
-    "WAIT";
+    data.signal;
 
 
-  const className =
-    signal === "BUY"
-      ? "buy"
-      : signal === "SELL"
-      ? "sell"
-      : "wait";
+  if (
+    signal !== "BUY" &&
+    signal !== "SELL"
+  ) {
 
+    return "";
 
-  const signalBox =
-    document.querySelector(
-      "#signal"
-    );
-
-
-  if (!signalBox) {
-    return;
   }
 
 
-  signalBox.className =
-    "signal";
-
-
-  signalBox.innerHTML = `
-
-    <div class="signal-top">
-
-      <span class="pill ${className}">
-        ${signal}
-      </span>
-
-      <span>
-
-        ${data.pair}
-
-        •
-
-        ${data.tf || "MTF"}
-
-      </span>
-
-    </div>
-
-
-    <h2>
-
-      ${
-        signal === "WAIT"
-          ? "NO TRADE — WAIT"
-          : signal +
-            " SETUP DETECTED"
-      }
-
-    </h2>
-
-
-    <div class="levels">
-
-
-      <div class="level">
-
-        <small>
-          PRICE
-        </small>
-
-        <b>
-          ${fmt(
-            data.price,
-            data.pair
-          )}
-        </b>
-
-      </div>
-
-
-      <div class="level">
-
-        <small>
-          ENTRY ZONE
-        </small>
-
-        <b>
-
-          ${
-            signal === "WAIT"
-              ? "—"
-              :
-                fmt(
-                  data.entryLow,
-                  data.pair
-                )
-                +
-                " – "
-                +
-                fmt(
-                  data.entryHigh,
-                  data.pair
-                )
-          }
-
-        </b>
-
-      </div>
-
-
-      <div class="level">
-
-        <small>
-          STOP LOSS
-        </small>
-
-        <b>
-
-          ${
-            signal === "WAIT"
-              ? "—"
-              :
-                fmt(
-                  data.sl,
-                  data.pair
-                )
-          }
-
-        </b>
-
-      </div>
-
-
-      <div class="level">
-
-        <small>
-          TP1 / TP2 / TP3
-        </small>
-
-        <b>
-
-          ${
-            signal === "WAIT"
-              ? "—"
-              :
-                fmt(
-                  data.tp1,
-                  data.pair
-                )
-                +
-                " / "
-                +
-                fmt(
-                  data.tp2,
-                  data.pair
-                )
-                +
-                " / "
-                +
-                fmt(
-                  data.tp3,
-                  data.pair
-                )
-          }
-
-        </b>
-
-      </div>
-
-
-    </div>
-
-
-    <div class="reasons">
-
-      <span class="reason">
-
-        ${
-          data.m15FVG ||
-          data.fvg
-            ? "✓"
-            : "✕"
-        }
-
-        Fair Value Gap
-
-      </span>
-
-
-      <span class="reason">
-
-        ${
-          data.m5Liquidity ||
-          data.liquidity
-            ? "✓"
-            : "✕"
-        }
-
-        Liquidity Sweep
-
-      </span>
-
-
-      <span class="reason">
-
-        ${
-          data.h1Structure ||
-          data.structure
-            ? "✓"
-            : "✕"
-        }
-
-        Market Structure
-
-      </span>
-
-
-      <span class="reason">
-
-        ${
-          data.m5BOS
-            ? "✓"
-            : "✕"
-        }
-
-        BOS / CHOCH
-
-      </span>
-
-
-      <span class="reason">
-
-        ${
-          data.bias === "BULLISH"
-            ? "✓ Bullish Bias"
-            :
-          data.bias === "BEARISH"
-            ? "✓ Bearish Bias"
-            :
-            "• Neutral Bias"
-        }
-
-      </span>
-
-    </div>
-
-
-    <div
-      class="muted"
-      style="margin-top:12px"
+  const mode =
+    getTradingMode();
+
+
+  const text =
+    mode === "MANUAL"
+      ? "VIEW TRADE LEVELS"
+      :
+    mode === "DEMO"
+      ? `PLACE ${signal} • DEMO`
+      :
+      `PLACE ${signal} • REAL`;
+
+
+  return `
+
+    <button
+      id="mogriPlaceTrade"
+      class="trade-button"
+      style="
+        width:100%;
+        margin-top:14px;
+        padding:13px;
+        border:0;
+        border-radius:10px;
+        font-weight:700;
+        cursor:pointer;
+      "
     >
 
-      MTF Score:
-      ${data.bullScore || 0}
-      Bull /
-      ${data.bearScore || 0}
-      Bear
+      ${text}
 
-    </div>
+    </button>
 
   `;
 
@@ -855,599 +1224,229 @@ function show(
 
 
 // =====================================================
-// SIGNAL HISTORY
+// PLACE TRADE
 // =====================================================
 
-function history(
+async function placeTrade(
   data
 ) {
 
-  if (
-    !data ||
-    data.signal === "WAIT"
-  ) {
-
-    return;
-
-  }
+  const mode =
+    getTradingMode();
 
 
-  const historyBox =
-    document.querySelector(
-      "#history"
-    );
-
-
-  if (!historyBox) {
-    return;
-  }
-
-
-  historyBox.innerHTML = `
-
-    <div class="row">
-
-      <b>
-        ${data.pair}
-      </b>
-
-      <span>
-        ${data.signal}
-      </span>
-
-      <span>
-        ${data.confidence}%
-      </span>
-
-      <span>
-        ${data.time || ""}
-      </span>
-
-    </div>
-
-  ` +
-  historyBox.innerHTML;
-
-}
-
-
-// =====================================================
-// RENDER SCANNER
-// =====================================================
-
-function renderScanner(
-  results
-) {
-
-  const marketsBox =
-    document.querySelector(
-      "#markets"
-    );
-
-
-  if (!marketsBox) {
-    return;
-  }
+  const signal =
+    data.signal;
 
 
   if (
-    !results.length
+    signal !== "BUY" &&
+    signal !== "SELL"
   ) {
 
-    marketsBox.innerHTML = `
-
-      <div class="card">
-
-        <b>
-          Market data unavailable
-        </b>
-
-        <p class="muted">
-          No market data was returned.
-        </p>
-
-      </div>
-
-    `;
+    alert(
+      "There is no confirmed trade signal."
+    );
 
     return;
 
   }
 
 
-  marketsBox.innerHTML =
-    results
-      .map(card)
-      .join("");
-
-
-  const strongSetups =
-    results.filter(
-      item =>
-        item.signal === "BUY" ||
-        item.signal === "SELL"
+  const entryLow =
+    Number(
+      data.entryLow
     );
 
 
-  const setupsBox =
-    document.querySelector(
-      "#setups"
+  const entryHigh =
+    Number(
+      data.entryHigh
     );
 
 
-  if (setupsBox) {
+  const entry =
+    (
+      entryLow +
+      entryHigh
+    ) / 2;
 
-    setupsBox.textContent =
-      strongSetups.length;
+
+  const sl =
+    Number(
+      data.sl
+    );
+
+
+  const tp1 =
+    Number(
+      data.tp1
+    );
+
+
+  const tp2 =
+    Number(
+      data.tp2
+    );
+
+
+  const tp3 =
+    Number(
+      data.tp3
+    );
+
+
+  if (
+    !Number.isFinite(entry) ||
+    !Number.isFinite(sl) ||
+    !Number.isFinite(tp1)
+  ) {
+
+    alert(
+      "Trade levels are incomplete."
+    );
+
+    return;
 
   }
 
 
-  const confidenceBox =
-    document.querySelector(
-      "#confidence"
+  if (
+    mode === "MANUAL"
+  ) {
+
+    alert(
+
+      `${signal} TRADE LEVELS\n\n` +
+
+      `Pair: ${data.pair}\n` +
+
+      `Entry: ${fmt(
+        entry,
+        data.pair
+      )}\n` +
+
+      `Entry Zone: ${fmt(
+        entryLow,
+        data.pair
+      )} - ${fmt(
+        entryHigh,
+        data.pair
+      )}\n` +
+
+      `SL: ${fmt(
+        sl,
+        data.pair
+      )}\n` +
+
+      `TP1: ${fmt(
+        tp1,
+        data.pair
+      )}\n` +
+
+      `TP2: ${fmt(
+        tp2,
+        data.pair
+      )}\n` +
+
+      `TP3: ${fmt(
+        tp3,
+        data.pair
+      )}`
+
     );
 
 
-  if (confidenceBox) {
+    return;
 
-    const average =
-      Math.round(
+  }
 
-        results.reduce(
-          (
-            sum,
-            item
-          ) =>
-            sum +
-            Number(
-              item.confidence ||
-              0
-            ),
-          0
-        )
-        /
-        results.length
+
+  if (
+    mode === "REAL"
+  ) {
+
+    const confirmed =
+      confirm(
+
+        `REAL TRADE WARNING\n\n` +
+
+        `${signal} ${data.pair}\n\n` +
+
+        `Entry: ${fmt(
+          entry,
+          data.pair
+        )}\n` +
+
+        `SL: ${fmt(
+          sl,
+          data.pair
+        )}\n` +
+
+        `TP1: ${fmt(
+          tp1,
+          data.pair
+        )}\n` +
+
+        `TP2: ${fmt(
+          tp2,
+          data.pair
+        )}\n` +
+
+        `TP3: ${fmt(
+          tp3,
+          data.pair
+        )}\n\n` +
+
+        `Continue?`
 
       );
 
 
-    confidenceBox.textContent =
-      average + "%";
+    if (!confirmed) {
+
+      return;
+
+    }
 
   }
-
-}
-
-
-// =====================================================
-// SCAN ALL MARKETS
-// =====================================================
-
-async function scan() {
-
-  if (scanRunning) {
-    return;
-  }
-
-
-  scanRunning =
-    true;
-
-
-  const scanButton =
-    document.querySelector(
-      "#scan"
-    );
-
-
-  if (scanButton) {
-
-    scanButton.disabled =
-      true;
-
-    scanButton.textContent =
-      "Scanning…";
-
-  }
-
-
-  setStatus(
-    "● SCANNING LIVE DATA • PAPER MODE"
-  );
-
-
-  const results = [];
 
 
   try {
 
-    for (
-      const pair of markets
-    ) {
+    const response =
+      await fetch(
+        "/api/trade",
+        {
+          method: "POST",
 
-      try {
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
 
-        const data =
-          await analyze(
-            pair,
-            "15M"
-          );
+          body:
+            JSON.stringify({
 
+              mode,
 
-        results.push(
-          data
-        );
+              symbol:
+                data.pair,
 
+              side:
+                signal,
 
-      } catch (
-        error
-      ) {
+              entry,
 
-        console.error(
-          pair,
-          error
-        );
+              entryLow,
 
-      }
+              entryHigh,
 
-    }
+              stopLoss:
+                sl,
 
+              takeProfit1:
+                tp1,
 
-    renderScanner(
-      results
-    );
-
-
-    if (
-      results.length
-    ) {
-
-      setStatus(
-        "● LIVE DATA • PAPER MODE"
-      );
-
-    } else {
-
-      setStatus(
-        "● DATA UNAVAILABLE"
-      );
-
-    }
-
-
-  } catch (
-    error
-  ) {
-
-    console.error(
-      error
-    );
-
-
-    setStatus(
-      "● DATA ERROR"
-    );
-
-  } finally {
-
-    scanRunning =
-      false;
-
-
-    if (scanButton) {
-
-      scanButton.disabled =
-        false;
-
-      scanButton.textContent =
-        "↻ Scan Markets";
-
-    }
-
-  }
-
-}
-
-
-// =====================================================
-// ANALYZE SELECTED MARKET
-// =====================================================
-
-async function analyzeSelected() {
-
-  const pairElement =
-    document.querySelector(
-      "#pair"
-    );
-
-
-  const tfElement =
-    document.querySelector(
-      "#tf"
-    );
-
-
-  const signalBox =
-    document.querySelector(
-      "#signal"
-    );
-
-
-  if (
-    !pairElement ||
-    !tfElement
-  ) {
-
-    console.error(
-      "Pair or timeframe selector not found."
-    );
-
-    return;
-
-  }
-
-
-  const pair =
-    pairElement.value;
-
-
-  const tf =
-    tfElement.value;
-
-
-  const analyzeButton =
-    document.querySelector(
-      "#analyze"
-    );
-
-
-  if (analyzeButton) {
-
-    analyzeButton.disabled =
-      true;
-
-    analyzeButton.textContent =
-      "Analyzing…";
-
-  }
-
-
-  setStatus(
-    "● CHECKING MTF DATA • PAPER MODE"
-  );
-
-
-  try {
-
-    /*
-    Selected analysis uses
-    the complete 4H → 1H → 15M → 5M
-    engine.
-
-    The selected dropdown timeframe
-    remains visible in the UI,
-    but the signal itself uses MTF.
-    */
-
-    const data =
-      await analyzeMTF(
-        pair
-      );
-
-
-    /*
-    Keep selected timeframe visible
-    if the backend returns MTF.
-    */
-
-    data.displayTf =
-      tf;
-
-
-    show(
-      data
-    );
-
-
-    history(
-      data
-    );
-
-
-    setStatus(
-      "● LIVE MTF DATA • PAPER MODE"
-    );
-
-
-  } catch (
-    error
-  ) {
-
-    console.error(
-      error
-    );
-
-
-    if (signalBox) {
-
-      signalBox.className =
-        "signal";
-
-
-      signalBox.innerHTML = `
-
-        <div class="signal-top">
-
-          <span class="pill wait">
-            DATA ERROR
-          </span>
-
-        </div>
-
-
-        <h2>
-          Failed to load data
-        </h2>
-
-
-        <p class="muted">
-          ${error.message}
-        </p>
-
-
-        <p class="muted">
-
-          If you have reached the
-          Twelve Data API limit,
-          wait for the quota to reset
-          before trying again.
-
-        </p>
-
-      `;
-
-    }
-
-
-    setStatus(
-      "● API LIMIT / DATA ERROR"
-    );
-
-
-  } finally {
-
-    if (analyzeButton) {
-
-      analyzeButton.disabled =
-        false;
-
-      analyzeButton.textContent =
-        "Analyze Selected";
-
-    }
-
-  }
-
-}
-
-
-// =====================================================
-// CONNECT BUTTONS
-// =====================================================
-
-function initializeMogriAI() {
-
-  console.log(
-    "MOGRI AI starting..."
-  );
-
-
-  const scanButton =
-    document.querySelector(
-      "#scan"
-    );
-
-
-  const analyzeButton =
-    document.querySelector(
-      "#analyze"
-    );
-
-
-  if (scanButton) {
-
-    scanButton.addEventListener(
-      "click",
-      scan
-    );
-
-
-    console.log(
-      "Scan button connected."
-    );
-
-  } else {
-
-    console.error(
-      "Scan button #scan not found."
-    );
-
-  }
-
-
-  if (analyzeButton) {
-
-    analyzeButton.addEventListener(
-      "click",
-      analyzeSelected
-    );
-
-
-    console.log(
-      "Analyze button connected."
-    );
-
-  } else {
-
-    console.error(
-      "Analyze button #analyze not found."
-    );
-
-  }
-
-
-  startLiveClock();
-
-
-  setStatus(
-    "● LIVE DATA • PAPER MODE"
-  );
-
-
-  console.log(
-    "MOGRI AI initialized."
-  );
-
-
-  console.log(
-    "Market cache: 60 seconds."
-  );
-
-
-  console.log(
-    "Automatic scanning: OFF."
-  );
-
-
-  console.log(
-    "Selected analysis: MTF ON."
-  );
-
-
-  console.log(
-    "Live clock: ON."
-  );
-
-}
-
-
-// =====================================================
-// PAGE LOAD
-// =====================================================
-
-if (
-  document.readyState ===
-  "loading"
-) {
-
-  document.addEventListener(
-    "DOMContentLoaded",
-    initializeMogriAI
-  );
-
-} else {
-
-  initializeMogriAI();
-
-}
+              takeProfit2:
+               
