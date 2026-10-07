@@ -1,8 +1,7 @@
 // =====================================================
 // MOGRI AI FOREX SIGNAL ANALYZER
-// LIVE MARKET DATA • PAPER / DEMO / REAL MODE
+// LIVE MARKET DATA • LIVE SIGNAL ANALYSIS
 // =====================================================
-
 
 const markets = [
   "EUR/USD",
@@ -13,7 +12,6 @@ const markets = [
   "AUD/USD"
 ];
 
-
 const tfMap = {
   "5M": "5min",
   "15M": "15min",
@@ -21,459 +19,135 @@ const tfMap = {
   "4H": "4h"
 };
 
-
 // =====================================================
 // SETTINGS
 // =====================================================
 
 const CACHE_TIME = 60 * 1000;
-
 const marketCache = new Map();
 
 let scanRunning = false;
-
+let currentSignal = null;
 
 // =====================================================
-// TRADING MODE
+// PAGE TEXT CLEANUP
+// Removes old DEMO / PAPER wording from index.html
 // =====================================================
 
-const TRADING_MODES = [
-  "MANUAL",
-  "DEMO",
-  "REAL"
-];
+function cleanOldDemoText() {
+  // Header status
+  document.querySelectorAll(".demo").forEach(el => {
+    el.textContent = "● LIVE MARKET DATA";
+  });
 
+  // Old signal placeholder
+  const signal = document.querySelector("#signal");
 
-function getTradingMode() {
+  if (signal) {
+    const paragraph = signal.querySelector("p");
 
-  const saved =
-    localStorage.getItem(
-      "mogriTradingMode"
-    );
-
-  if (
-    TRADING_MODES.includes(saved)
-  ) {
-
-    return saved;
-
+    if (paragraph) {
+      paragraph.textContent =
+        "Live market data analyzed using market structure, FVG, liquidity, momentum and multi-timeframe confirmation.";
+    }
   }
 
-  return "DEMO";
+  // Footer
+  const footer = document.querySelector("footer");
 
+  if (footer) {
+    footer.textContent =
+      "MOGRI AI • LIVE MARKET DATA • SIGNAL ANALYSIS";
+  }
+
+  // Remove any old trading-mode selector created by the previous app.js
+  const oldMode = document.querySelector("#mogriModeWrapper");
+
+  if (oldMode) {
+    oldMode.remove();
+  }
+
+  const oldTradeButton =
+    document.querySelector("#mogriPlaceTrade");
+
+  if (oldTradeButton) {
+    oldTradeButton.remove();
+  }
 }
 
+// =====================================================
+// LIVE STATUS
+// =====================================================
 
-function setTradingMode(mode) {
-
-  if (
-    !TRADING_MODES.includes(mode)
-  ) {
-
-    return;
-
-  }
-
-
-  if (mode === "REAL") {
-
-    const confirmed =
-      confirm(
-        "REAL MODE WARNING\n\n" +
-        "This mode is intended for real-money trading.\n\n" +
-        "Do you want to enable REAL mode?"
-      );
-
-
-    if (!confirmed) {
-
-      updateTradingModeUI();
-
-      return;
-
-    }
-
-  }
-
-
-  localStorage.setItem(
-    "mogriTradingMode",
-    mode
-  );
-
-
-  updateTradingModeUI();
-
-
-  setStatus(
-    `● LIVE DATA • ${mode} MODE`
-  );
-
+function setStatus(message = "● LIVE MARKET DATA") {
+  document.querySelectorAll(".demo").forEach(el => {
+    el.textContent = message;
+  });
 }
-
-
-function updateTradingModeUI() {
-
-  let selector =
-    document.querySelector(
-      "#mogriTradingMode"
-    );
-
-
-  if (!selector) {
-
-    const signalBox =
-      document.querySelector(
-        "#signal"
-      );
-
-
-    if (!signalBox) {
-
-      return;
-
-    }
-
-
-    const wrapper =
-      document.createElement(
-        "div"
-      );
-
-
-    wrapper.id =
-      "mogriModeWrapper";
-
-
-    wrapper.style =
-      `
-        margin-bottom:12px;
-        padding:10px;
-        border-radius:10px;
-        background:rgba(255,255,255,.04);
-      `;
-
-
-    wrapper.innerHTML = `
-
-      <label
-        style="
-          display:block;
-          font-size:11px;
-          color:#8b96a8;
-          margin-bottom:5px;
-        "
-      >
-        TRADING MODE
-      </label>
-
-      <select
-        id="mogriTradingMode"
-        style="
-          width:100%;
-          padding:10px;
-          border-radius:8px;
-          border:1px solid rgba(255,255,255,.1);
-          background:#111827;
-          color:white;
-        "
-      >
-
-        <option value="MANUAL">
-          MANUAL
-        </option>
-
-        <option value="DEMO">
-          DEMO
-        </option>
-
-        <option value="REAL">
-          REAL
-        </option>
-
-      </select>
-
-    `;
-
-
-    signalBox.parentNode.insertBefore(
-      wrapper,
-      signalBox
-    );
-
-
-    selector =
-      document.querySelector(
-        "#mogriTradingMode"
-      );
-
-
-    if (selector) {
-
-      selector.addEventListener(
-        "change",
-        () => {
-
-          setTradingMode(
-            selector.value
-          );
-
-        }
-      );
-
-    }
-
-  }
-
-
-  const mode =
-    getTradingMode();
-
-
-  if (selector) {
-
-    selector.value =
-      mode;
-
-  }
-
-}
-
 
 // =====================================================
 // LIVE CLOCK
 // =====================================================
 
 function updateLiveClock() {
+  const now = new Date();
 
-  const now =
-    new Date();
+  const time = now.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
 
-
-  const time =
-    now.toLocaleTimeString(
-      [],
-      {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      }
-    );
-
-
-  const elements =
-    document.querySelectorAll(
+  document
+    .querySelectorAll(
       "#clock, #time, .clock, .time, .current-time"
-    );
-
-
-  elements.forEach(
-    element => {
-
-      element.textContent =
-        time;
-
-    }
-  );
-
+    )
+    .forEach(el => {
+      el.textContent = time;
+    });
 }
-
 
 function startLiveClock() {
-
   updateLiveClock();
 
-
-  setInterval(
-    updateLiveClock,
-    1000
-  );
-
+  setInterval(updateLiveClock, 1000);
 }
-
 
 // =====================================================
 // FORMAT PRICE
 // =====================================================
 
-function fmt(
-  value,
-  pair
-) {
-
+function fmt(value, pair) {
   if (
     value === undefined ||
     value === null ||
-    !Number.isFinite(
-      Number(value)
-    )
+    !Number.isFinite(Number(value))
   ) {
-
     return "—";
-
   }
 
-
-  if (
-    pair === "XAU/USD"
-  ) {
-
-    return Number(value)
-      .toFixed(2);
-
+  if (pair === "XAU/USD") {
+    return Number(value).toFixed(2);
   }
 
-
-  return Number(value)
-    .toFixed(5);
-
+  return Number(value).toFixed(5);
 }
-
-
-// =====================================================
-// STATUS
-// =====================================================
-
-function setStatus(
-  message
-) {
-
-  const elements =
-    document.querySelectorAll(
-      ".demo"
-    );
-
-
-  elements.forEach(
-    element => {
-
-      element.textContent =
-        message;
-
-    }
-  );
-
-}
-
-
-// =====================================================
-// CACHE
-// =====================================================
-
-function cacheKey(
-  pair,
-  tf
-) {
-
-  return `${pair}_${tf}`;
-
-}
-
-
-function getCached(
-  pair,
-  tf
-) {
-
-  const key =
-    cacheKey(
-      pair,
-      tf
-    );
-
-
-  const item =
-    marketCache.get(
-      key
-    );
-
-
-  if (!item) {
-
-    return null;
-
-  }
-
-
-  const age =
-    Date.now() -
-    item.time;
-
-
-  if (
-    age >
-    CACHE_TIME
-  ) {
-
-    marketCache.delete(
-      key
-    );
-
-    return null;
-
-  }
-
-
-  console.log(
-    "Using cached data:",
-    pair,
-    tf
-  );
-
-
-  return item.data;
-
-}
-
-
-function saveCache(
-  pair,
-  tf,
-  data
-) {
-
-  marketCache.set(
-    cacheKey(
-      pair,
-      tf
-    ),
-    {
-      time: Date.now(),
-      data
-    }
-  );
-
-}
-
 
 // =====================================================
 // CONDITION HELPER
 // =====================================================
 
-function conditionExists(
-  value
-) {
-
+function conditionExists(value) {
   if (
     value === undefined ||
     value === null ||
     value === false
   ) {
-
     return false;
-
   }
 
-
-  if (
-    typeof value === "string"
-  ) {
-
-    const normalized =
-      value
-        .trim()
-        .toUpperCase();
-
+  if (typeof value === "string") {
+    const normalized = value.trim().toUpperCase();
 
     if (
       normalized === "" ||
@@ -482,413 +156,625 @@ function conditionExists(
       normalized === "NO" ||
       normalized === "FALSE"
     ) {
-
       return false;
-
     }
-
   }
-
 
   return true;
-
 }
 
+// =====================================================
+// CACHE
+// =====================================================
+
+function cacheKey(pair, tf) {
+  return `${pair}_${tf}`;
+}
+
+function getCached(pair, tf) {
+  const key = cacheKey(pair, tf);
+  const item = marketCache.get(key);
+
+  if (!item) {
+    return null;
+  }
+
+  const age = Date.now() - item.time;
+
+  if (age > CACHE_TIME) {
+    marketCache.delete(key);
+    return null;
+  }
+
+  console.log("Using cached data:", pair, tf);
+
+  return item.data;
+}
+
+function saveCache(pair, tf, data) {
+  marketCache.set(
+    cacheKey(pair, tf),
+    {
+      time: Date.now(),
+      data
+    }
+  );
+}
 
 // =====================================================
-// SINGLE TIMEFRAME ANALYSIS
+// API ERROR HANDLING
 // =====================================================
 
-async function analyze(
-  pair,
-  tf
-) {
+async function parseResponse(response, fallbackMessage) {
+  let data;
 
-  const interval =
-    tfMap[tf] ||
-    "15min";
-
-
-  const cached =
-    getCached(
-      pair,
-      tf
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(
+      "Invalid response from market server."
     );
+  }
 
+  if (!response.ok || data.error) {
+    throw new Error(
+      data.error || fallbackMessage
+    );
+  }
+
+  return data;
+}
+
+// =====================================================
+// SINGLE TIMEFRAME MARKET DATA
+// Used by Market Scanner
+// One request per market
+// =====================================================
+
+async function analyze(pair, tf) {
+  const interval = tfMap[tf] || "15min";
+
+  const cached = getCached(pair, tf);
 
   if (cached) {
-
     return cached;
-
   }
 
+  const key = cacheKey(pair, tf);
+  const loadingKey = `${key}_loading`;
 
-  const key =
-    cacheKey(
-      pair,
-      tf
-    );
-
-
-  const loadingKey =
-    `${key}_loading`;
-
-
-  if (
-    marketCache.has(
-      loadingKey
-    )
-  ) {
-
-    return await marketCache.get(
-      loadingKey
-    );
-
+  if (marketCache.has(loadingKey)) {
+    return await marketCache.get(loadingKey);
   }
 
-
-  const request =
-    fetch(
-      `/api/market?symbol=${encodeURIComponent(pair)}&interval=${encodeURIComponent(interval)}`
-    )
-
-      .then(
-        async response => {
-
-          let data;
-
-
-          try {
-
-            data =
-              await response.json();
-
-          } catch {
-
-            throw new Error(
-              "Invalid response from market server."
-            );
-
-          }
-
-
-          if (
-            !response.ok ||
-            data.error
-          ) {
-
-            throw new Error(
-              data.error ||
-              "Failed to load market data."
-            );
-
-          }
-
-
-          saveCache(
-            pair,
-            tf,
-            data
-          );
-
-
-          return data;
-
-        }
+  const request = fetch(
+    `/api/market?symbol=${encodeURIComponent(
+      pair
+    )}&interval=${encodeURIComponent(interval)}`
+  )
+    .then(response =>
+      parseResponse(
+        response,
+        "Failed to load live market data."
       )
-
-      .finally(
-        () => {
-
-          marketCache.delete(
-            loadingKey
-          );
-
-        }
-      );
-
+    )
+    .then(data => {
+      saveCache(pair, tf, data);
+      return data;
+    })
+    .finally(() => {
+      marketCache.delete(loadingKey);
+    });
 
   marketCache.set(
     loadingKey,
     request
   );
 
-
   return await request;
-
 }
-
 
 // =====================================================
 // MULTI-TIMEFRAME ANALYSIS
+// 4H → 1H → 15M → 5M
 // =====================================================
 
-async function analyzeMTF(
-  pair
-) {
-
-  const cached =
-    getCached(
-      pair,
-      "MTF"
-    );
-
+async function analyzeMTF(pair) {
+  const cached = getCached(pair, "MTF");
 
   if (cached) {
-
     console.log(
       "Using cached MTF data:",
       pair
     );
 
-
     return cached;
-
   }
 
+  const key = cacheKey(pair, "MTF");
+  const loadingKey = `${key}_loading`;
 
-  const key =
-    cacheKey(
-      pair,
-      "MTF"
-    );
-
-
-  const loadingKey =
-    `${key}_loading`;
-
-
-  if (
-    marketCache.has(
-      loadingKey
-    )
-  ) {
-
-    return await marketCache.get(
-      loadingKey
-    );
-
+  if (marketCache.has(loadingKey)) {
+    return await marketCache.get(loadingKey);
   }
 
-
-  const request =
-    fetch(
-      `/api/market?symbol=${encodeURIComponent(pair)}&mtf=true`
-    )
-
-      .then(
-        async response => {
-
-          let data;
-
-
-          try {
-
-            data =
-              await response.json();
-
-          } catch {
-
-            throw new Error(
-              "Invalid MTF response from market server."
-            );
-
-          }
-
-
-          if (
-            !response.ok ||
-            data.error
-          ) {
-
-            throw new Error(
-              data.error ||
-              "Multi-timeframe analysis failed."
-            );
-
-          }
-
-
-          saveCache(
-            pair,
-            "MTF",
-            data
-          );
-
-
-          return data;
-
-        }
+  const request = fetch(
+    `/api/market?symbol=${encodeURIComponent(
+      pair
+    )}&mtf=true`
+  )
+    .then(response =>
+      parseResponse(
+        response,
+        "Multi-timeframe analysis failed."
       )
-
-      .finally(
-        () => {
-
-          marketCache.delete(
-            loadingKey
-          );
-
-        }
-      );
-
+    )
+    .then(data => {
+      saveCache(pair, "MTF", data);
+      return data;
+    })
+    .finally(() => {
+      marketCache.delete(loadingKey);
+    });
 
   marketCache.set(
     loadingKey,
     request
   );
 
-
   return await request;
-
 }
 
+// =====================================================
+// SIGNAL CLASS
+// =====================================================
+
+function signalClass(signal) {
+  if (signal === "BUY") {
+    return "buy";
+  }
+
+  if (signal === "SELL") {
+    return "sell";
+  }
+
+  return "wait";
+}
 
 // =====================================================
-// ORDER BLOCK INFORMATION
+// SIGNAL REASONS
 // =====================================================
 
-function getOBType(
-  data
-) {
+function buildReasons(data) {
+  const reasons = [];
 
-  return (
+  if (conditionExists(data.structure)) {
+    reasons.push(
+      `Market structure: ${data.structure}`
+    );
+  }
+
+  if (conditionExists(data.bos)) {
+    reasons.push(
+      `BOS/CHoCH: ${data.bos}`
+    );
+  }
+
+  if (conditionExists(data.liquidity)) {
+    reasons.push(
+      `Liquidity: ${data.liquidity}`
+    );
+  }
+
+  if (conditionExists(data.fvg)) {
+    reasons.push(
+      `FVG: ${data.fvg}`
+    );
+  }
+
+  if (conditionExists(data.momentum)) {
+    reasons.push(
+      `Momentum: ${data.momentum}`
+    );
+  }
+
+  return reasons;
+}
+
+// =====================================================
+// MTF REASONS
+// =====================================================
+
+function buildMTFReasons(data) {
+  const reasons = [];
+
+  if (conditionExists(data.h4Bias)) {
+    reasons.push(
+      `4H bias: ${data.h4Bias}`
+    );
+  }
+
+  if (conditionExists(data.h1Structure)) {
+    reasons.push(
+      `1H structure: ${data.h1Structure}`
+    );
+  }
+
+  if (conditionExists(data.m15Structure)) {
+    reasons.push(
+      `15M structure: ${data.m15Structure}`
+    );
+  }
+
+  if (conditionExists(data.m5Structure)) {
+    reasons.push(
+      `5M structure: ${data.m5Structure}`
+    );
+  }
+
+  if (conditionExists(data.m5BOS)) {
+    reasons.push(
+      `5M BOS/CHoCH: ${data.m5BOS}`
+    );
+  }
+
+  if (conditionExists(data.m5Liquidity)) {
+    reasons.push(
+      `5M liquidity: ${data.m5Liquidity}`
+    );
+  }
+
+  if (conditionExists(data.m5FVG)) {
+    reasons.push(
+      `5M FVG: ${data.m5FVG}`
+    );
+  }
+
+  if (conditionExists(data.m5Momentum)) {
+    reasons.push(
+      `5M momentum: ${data.m5Momentum}`
+    );
+  }
+
+  return reasons;
+}
+
+// =====================================================
+// TRADE LEVELS HTML
+// =====================================================
+
+function levelsHTML(data) {
+  const signal = data.signal;
+
+  if (
+    signal !== "BUY" &&
+    signal !== "SELL"
+  ) {
+    return `
+      <div
+        style="
+          margin-top:16px;
+          padding:14px;
+          border-radius:10px;
+          background:rgba(255,255,255,.025);
+          border:1px solid rgba(255,255,255,.06);
+        "
+      >
+        <b>WAITING FOR CLEAN SETUP</b>
+        <div
+          class="muted"
+          style="margin-top:6px"
+        >
+          No confirmed entry, stop loss or take-profit levels yet.
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div
+      style="
+        margin-top:16px;
+        padding:14px;
+        border-radius:10px;
+        background:rgba(255,255,255,.025);
+        border:1px solid rgba(255,255,255,.06);
+      "
+    >
+      <b>TRADE LEVELS</b>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:10px;
+          margin-top:12px;
+        "
+      >
+
+        <div>
+          <small>ENTRY ZONE</small>
+          <br>
+          <b>
+            ${fmt(data.entryLow, data.pair)}
+            -
+            ${fmt(data.entryHigh, data.pair)}
+          </b>
+        </div>
+
+        <div>
+          <small>STOP LOSS</small>
+          <br>
+          <b>
+            ${fmt(data.sl, data.pair)}
+          </b>
+        </div>
+
+        <div>
+          <small>TAKE PROFIT 1</small>
+          <br>
+          <b>
+            ${fmt(data.tp1, data.pair)}
+          </b>
+        </div>
+
+        <div>
+          <small>TAKE PROFIT 2</small>
+          <br>
+          <b>
+            ${fmt(data.tp2, data.pair)}
+          </b>
+        </div>
+
+        <div>
+          <small>TAKE PROFIT 3</small>
+          <br>
+          <b>
+            ${fmt(data.tp3, data.pair)}
+          </b>
+        </div>
+
+      </div>
+
+      <div
+        class="muted"
+        style="margin-top:12px"
+      >
+        Execute orders manually in your broker/MT5.
+      </div>
+    </div>
+  `;
+}
+
+// =====================================================
+// ANALYSIS DETAILS
+// =====================================================
+
+function analysisDetailsHTML(data) {
+  const isMTF =
+    data.tf === "MTF";
+
+  const reasons =
+    isMTF
+      ? buildMTFReasons(data)
+      : buildReasons(data);
+
+  return `
+    <div
+      style="
+        margin-top:16px;
+        padding:14px;
+        border-radius:10px;
+        background:rgba(255,255,255,.025);
+        border:1px solid rgba(255,255,255,.06);
+      "
+    >
+
+      <b>
+        ${isMTF
+          ? "MULTI-TIMEFRAME ANALYSIS"
+          : "MARKET ANALYSIS"}
+      </b>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:10px;
+          margin-top:12px;
+        "
+      >
+
+        <div>
+          <small>PRICE</small>
+          <br>
+          <b>
+            ${fmt(data.price, data.pair)}
+          </b>
+        </div>
+
+        <div>
+          <small>TIMEFRAME</small>
+          <br>
+          <b>
+            ${data.tf || "—"}
+          </b>
+        </div>
+
+        <div>
+          <small>STRUCTURE</small>
+          <br>
+          <b>
+            ${
+              data.structure ||
+              data.h4Bias ||
+              "NEUTRAL"
+            }
+          </b>
+        </div>
+
+        <div>
+          <small>BOS / CHOCH</small>
+          <br>
+          <b>
+            ${
+              data.bos ||
+              data.m5BOS ||
+              "NONE"
+            }
+          </b>
+        </div>
+
+        <div>
+          <small>LIQUIDITY</small>
+          <br>
+          <b>
+            ${
+              data.liquidity ||
+              data.m5Liquidity ||
+              "NONE"
+            }
+          </b>
+        </div>
+
+        <div>
+          <small>FVG</small>
+          <br>
+          <b>
+            ${
+              data.fvg ||
+              data.m5FVG ||
+              "NONE"
+            }
+          </b>
+        </div>
+
+      </div>
+
+      ${
+        isMTF
+          ? `
+            <div
+              style="
+                margin-top:12px;
+                display:grid;
+                grid-template-columns:repeat(2,minmax(0,1fr));
+                gap:10px;
+              "
+            >
+
+              <div>
+                <small>BULL SCORE</small>
+                <br>
+                <b>${data.bullScore ?? "—"}</b>
+              </div>
+
+              <div>
+                <small>BEAR SCORE</small>
+                <br>
+                <b>${data.bearScore ?? "—"}</b>
+              </div>
+
+            </div>
+          `
+          : ""
+      }
+
+      <div style="margin-top:14px">
+        <b>CONFIRMATIONS</b>
+
+        ${
+          reasons.length
+            ? `
+              <ul
+                style="
+                  margin-top:8px;
+                  padding-left:20px;
+                "
+              >
+                ${reasons
+                  .map(
+                    reason =>
+                      `<li style="margin-bottom:5px">${reason}</li>`
+                  )
+                  .join("")}
+              </ul>
+            `
+            : `
+              <div
+                class="muted"
+                style="margin-top:7px"
+              >
+                Waiting for stronger market confirmation.
+              </div>
+            `
+        }
+
+      </div>
+
+    </div>
+  `;
+}
+
+// =====================================================
+// ORDER BLOCK UI
+// Compatible with current/new API versions
+// =====================================================
+
+function orderBlockHTML(data) {
+  const type =
     data.m5OBType ||
     data.obType ||
-    "NONE"
-  );
-
-}
-
-
-function getOBStatus(
-  data
-) {
-
-  return (
-    data.m5OBStatus ||
-    data.obStatus ||
-    "NONE"
-  );
-
-}
-
-
-function getOBHigh(
-  data
-) {
-
-  return (
-    data.m5OBHigh ??
-    data.obHigh ??
-    null
-  );
-
-}
-
-
-function getOBLow(
-  data
-) {
-
-  return (
-    data.m5OBLow ??
-    data.obLow ??
-    null
-  );
-
-}
-
-
-function getOBStrength(
-  data
-) {
-
-  return (
-    data.m5OBStrength ??
-    data.obStrength ??
-    null
-  );
-
-}
-
-
-function orderBlockHTML(
-  data
-) {
-
-  const type =
-    getOBType(data);
-
+    "NONE";
 
   const status =
-    getOBStatus(data);
-
+    data.m5OBStatus ||
+    data.obStatus ||
+    "NONE";
 
   const high =
-    getOBHigh(data);
-
+    data.m5OBHigh ??
+    data.obHigh ??
+    null;
 
   const low =
-    getOBLow(data);
-
+    data.m5OBLow ??
+    data.obLow ??
+    null;
 
   const strength =
-    getOBStrength(data);
-
+    data.m5OBStrength ??
+    data.obStrength ??
+    null;
 
   const hasOB =
     type === "BULLISH" ||
     type === "BEARISH";
 
-
   let message =
     "No confirmed Order Block";
 
-
   if (hasOB) {
-
-    if (
-      status === "IN_ZONE"
-    ) {
-
+    if (status === "IN_ZONE") {
       message =
         "PRICE INSIDE ORDER BLOCK";
-
     } else if (
-      status === "ABOVE_ZONE"
-    ) {
-
-      message =
-        "WAITING FOR OB RETEST";
-
-    } else if (
+      status === "ABOVE_ZONE" ||
       status === "BELOW_ZONE"
     ) {
-
       message =
         "WAITING FOR OB RETEST";
-
-    } else if (
-      status === "AWAY"
-    ) {
-
+    } else if (status === "AWAY") {
       message =
         "ORDER BLOCK AWAY FROM PRICE";
-
     } else {
-
       message =
         "ORDER BLOCK DETECTED";
-
     }
-
   }
 
-
   return `
-
     <div
-      class="ob-panel"
       style="
         margin-top:14px;
         padding:12px;
@@ -902,94 +788,53 @@ function orderBlockHTML(
         style="
           display:flex;
           justify-content:space-between;
-          gap:10px;
           align-items:center;
-          margin-bottom:8px;
+          gap:10px;
+          margin-bottom:10px;
         "
       >
+        <b>ORDER BLOCK</b>
 
-        <b>
-          ORDER BLOCK
-        </b>
-
-        <span
-          class="pill ${
-            type === "BULLISH"
-              ? "buy"
-              :
-            type === "BEARISH"
-              ? "sell"
-              : "wait"
-          }"
-        >
+        <span class="pill ${
+          type === "BULLISH"
+            ? "buy"
+            : type === "BEARISH"
+            ? "sell"
+            : "wait"
+        }">
           ${hasOB ? type : "NONE"}
         </span>
-
       </div>
-
 
       <div
         style="
           display:grid;
-          grid-template-columns:
-            repeat(2,minmax(0,1fr));
-          gap:8px;
+          grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:9px;
         "
       >
 
         <div>
-
-          <small>
-            OB HIGH
-          </small>
-
+          <small>OB HIGH</small>
           <br>
-
-          <b>
-            ${fmt(high, data.pair)}
-          </b>
-
+          <b>${fmt(high, data.pair)}</b>
         </div>
 
-
         <div>
-
-          <small>
-            OB LOW
-          </small>
-
+          <small>OB LOW</small>
           <br>
-
-          <b>
-            ${fmt(low, data.pair)}
-          </b>
-
+          <b>${fmt(low, data.pair)}</b>
         </div>
 
-
         <div>
-
-          <small>
-            STATUS
-          </small>
-
+          <small>STATUS</small>
           <br>
-
-          <b>
-            ${status}
-          </b>
-
+          <b>${status}</b>
         </div>
 
-
         <div>
-
-          <small>
-            STRENGTH
-          </small>
-
+          <small>STRENGTH</small>
           <br>
-
           <b>
             ${
               strength === null ||
@@ -998,69 +843,46 @@ function orderBlockHTML(
                 : strength
             }
           </b>
-
         </div>
 
       </div>
-
 
       <div
         class="muted"
         style="margin-top:10px"
       >
-
         ${message}
-
       </div>
 
     </div>
-
   `;
-
 }
-
 
 // =====================================================
 // SCANNER CARD
 // =====================================================
 
-function card(
-  data
-) {
-
+function card(data) {
   const signal =
-    data.signal ||
-    "WAIT";
-
+    data.signal || "WAIT";
 
   const className =
-    signal === "BUY"
-      ? "buy"
-      : signal === "SELL"
-      ? "sell"
-      : "wait";
-
+    signalClass(signal);
 
   const confidence =
-    Number(
-      data.confidence || 0
-    );
-
+    Number(data.confidence || 0);
 
   const obType =
     data.m5OBType ||
     data.obType ||
     "NONE";
 
-
   const obStatus =
     data.m5OBStatus ||
     data.obStatus ||
     "NONE";
 
-
   return `
-
     <div class="card">
 
       <div class="pairrow">
@@ -1075,9 +897,7 @@ function card(
 
       </div>
 
-
       <h3>
-
         ${confidence}%
 
         <span
@@ -1088,12 +908,9 @@ function card(
         >
           confidence
         </span>
-
       </h3>
 
-
       <div class="bar">
-
         <i
           style="
             width:${Math.min(
@@ -1102,9 +919,7 @@ function card(
             )}%
           "
         ></i>
-
       </div>
-
 
       <div class="mini">
 
@@ -1113,12 +928,9 @@ function card(
         </span>
 
         <span>
-
           FVG
           ${
-            conditionExists(
-              data.fvg
-            )
+            conditionExists(data.fvg)
               ? "✓"
               : "—"
           }
@@ -1127,17 +939,30 @@ function card(
 
           LIQ
           ${
-            conditionExists(
-              data.liquidity
-            )
+            conditionExists(data.liquidity)
               ? "✓"
               : "—"
           }
-
         </span>
 
       </div>
 
+      <div
+        class="mini"
+        style="margin-top:7px"
+      >
+
+        <span>
+          Structure:
+          ${data.structure || "NEUTRAL"}
+        </span>
+
+        <span>
+          BOS:
+          ${data.bos || "NONE"}
+        </span>
+
+      </div>
 
       <div
         class="mini"
@@ -1156,297 +981,659 @@ function card(
       </div>
 
     </div>
-
   `;
-
 }
 
-
 // =====================================================
-// PLACE TRADE BUTTON
+// SHOW SIGNAL
 // =====================================================
 
-function createTradeButton(
-  data
-) {
+function show(data) {
+  currentSignal = data;
 
-  const signal =
-    data.signal;
+  window.mogriCurrentSignal = data;
 
+  const signalBox =
+    document.querySelector("#signal");
 
-  if (
-    signal !== "BUY" &&
-    signal !== "SELL"
-  ) {
-
-    return "";
-
+  if (!signalBox) {
+    return;
   }
 
+  const signal =
+    data.signal || "WAIT";
 
-  const mode =
-    getTradingMode();
+  const confidence =
+    Number(data.confidence || 0);
 
+  const className =
+    signalClass(signal);
 
-  const text =
-    mode === "MANUAL"
-      ? "VIEW TRADE LEVELS"
-      :
-    mode === "DEMO"
-      ? `PLACE ${signal} • DEMO`
-      :
-      `PLACE ${signal} • REAL`;
+  const signalTime =
+    data.time
+      ? String(data.time)
+      : new Date().toISOString();
 
+  signalBox.classList.remove(
+    "empty"
+  );
 
-  return `
+  signalBox.innerHTML = `
+    <div class="signal-top">
 
-    <button
-      id="mogriPlaceTrade"
-      class="trade-button"
+      <span class="pill ${className}">
+        ${signal}
+      </span>
+
+      <span id="time">
+        ${signalTime}
+      </span>
+
+    </div>
+
+    <h2>
+      ${data.pair || "Market"}
+      •
+      ${signal}
+      ${
+        data.tf === "MTF"
+          ? "MTF"
+          : data.tf || ""
+      }
+    </h2>
+
+    <div
       style="
-        width:100%;
-        margin-top:14px;
-        padding:13px;
-        border:0;
-        border-radius:10px;
-        font-weight:700;
-        cursor:pointer;
+        font-size:28px;
+        font-weight:800;
+        margin-top:8px;
       "
     >
+      ${confidence}%
+    </div>
 
-      ${text}
+    <div
+      class="muted"
+      style="margin-top:3px"
+    >
+      Signal confidence
+    </div>
 
-    </button>
+    <div
+      style="
+        margin-top:14px;
+        padding:10px 12px;
+        border-radius:8px;
+        background:rgba(200,255,0,.06);
+        border:1px solid rgba(200,255,0,.12);
+      "
+    >
+      <b>● LIVE MARKET DATA</b>
+      <div
+        class="muted"
+        style="margin-top:4px"
+      >
+        MOGRI AI is analyzing current market conditions.
+      </div>
+    </div>
 
+    ${levelsHTML(data)}
+
+    ${analysisDetailsHTML(data)}
+
+    ${orderBlockHTML(data)}
+
+    <div
+      class="muted"
+      style="
+        margin-top:14px;
+        font-size:12px;
+      "
+    >
+      Signal is analytical only. Place any order manually
+      through your broker or MT5.
+    </div>
   `;
 
+  addHistory(data);
 }
 
+// =====================================================
+// HISTORY
+// =====================================================
+
+function getHistory() {
+  try {
+    return JSON.parse(
+      localStorage.getItem(
+        "mogriSignalHistory"
+      ) || "[]"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history) {
+  localStorage.setItem(
+    "mogriSignalHistory",
+    JSON.stringify(history)
+  );
+}
+
+function addHistory(data) {
+  const history =
+    getHistory();
+
+  const item = {
+    pair: data.pair,
+    signal: data.signal,
+    confidence: data.confidence,
+    price: data.price,
+    time:
+      data.time ||
+      new Date().toISOString()
+  };
+
+  const duplicate =
+    history.length > 0 &&
+    history[0].pair === item.pair &&
+    history[0].signal === item.signal &&
+    history[0].time === item.time;
+
+  if (!duplicate) {
+    history.unshift(item);
+  }
+
+  saveHistory(
+    history.slice(0, 20)
+  );
+
+  renderHistory();
+}
+
+function renderHistory() {
+  const container =
+    document.querySelector(
+      "#history"
+    );
+
+  if (!container) {
+    return;
+  }
+
+  const history =
+    getHistory();
+
+  if (!history.length) {
+    container.innerHTML = `
+      <div
+        class="muted"
+        style="padding:12px 0"
+      >
+        No signals analyzed yet.
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML =
+    history
+      .map(item => `
+        <div
+          style="
+            display:grid;
+            grid-template-columns:
+              1fr auto auto;
+            gap:10px;
+            align-items:center;
+            padding:11px 0;
+            border-bottom:
+              1px solid rgba(255,255,255,.05);
+          "
+        >
+
+          <div>
+            <b>${item.pair}</b>
+
+            <div
+              class="muted"
+              style="font-size:11px"
+            >
+              ${
+                new Date(
+                  item.time
+                ).toLocaleString()
+              }
+            </div>
+          </div>
+
+          <span
+            class="pill ${signalClass(
+              item.signal
+            )}"
+          >
+            ${item.signal}
+          </span>
+
+          <b>
+            ${Number(
+              item.confidence || 0
+            )}%
+          </b>
+
+        </div>
+      `)
+      .join("");
+}
 
 // =====================================================
-// PLACE TRADE
+// SCANNER
 // =====================================================
 
-async function placeTrade(
-  data
+function setScannerStats(
+  scanned,
+  setups,
+  confidence
 ) {
-
-  const mode =
-    getTradingMode();
-
-
-  const signal =
-    data.signal;
-
-
-  if (
-    signal !== "BUY" &&
-    signal !== "SELL"
-  ) {
-
-    alert(
-      "There is no confirmed trade signal."
+  const scannedEl =
+    document.querySelector(
+      "#scanned"
     );
 
+  const setupsEl =
+    document.querySelector(
+      "#setups"
+    );
+
+  const confidenceEl =
+    document.querySelector(
+      "#confidence"
+    );
+
+  if (scannedEl) {
+    scannedEl.textContent =
+      scanned;
+  }
+
+  if (setupsEl) {
+    setupsEl.textContent =
+      setups;
+  }
+
+  if (confidenceEl) {
+    confidenceEl.textContent =
+      confidence;
+  }
+}
+
+async function scan() {
+  if (scanRunning) {
     return;
-
   }
 
+  scanRunning = true;
 
-  const entryLow =
-    Number(
-      data.entryLow
+  const button =
+    document.querySelector(
+      "#scan"
     );
 
-
-  const entryHigh =
-    Number(
-      data.entryHigh
+  const marketsBox =
+    document.querySelector(
+      "#markets"
     );
 
-
-  const entry =
-    (
-      entryLow +
-      entryHigh
-    ) / 2;
-
-
-  const sl =
-    Number(
-      data.sl
-    );
-
-
-  const tp1 =
-    Number(
-      data.tp1
-    );
-
-
-  const tp2 =
-    Number(
-      data.tp2
-    );
-
-
-  const tp3 =
-    Number(
-      data.tp3
-    );
-
-
-  if (
-    !Number.isFinite(entry) ||
-    !Number.isFinite(sl) ||
-    !Number.isFinite(tp1)
-  ) {
-
-    alert(
-      "Trade levels are incomplete."
-    );
-
-    return;
-
+  if (button) {
+    button.disabled = true;
+    button.textContent =
+      "Scanning live data...";
   }
 
+  setStatus(
+    "● LIVE MARKET DATA • SCANNING"
+  );
 
-  if (
-    mode === "MANUAL"
-  ) {
-
-    alert(
-
-      `${signal} TRADE LEVELS\n\n` +
-
-      `Pair: ${data.pair}\n` +
-
-      `Entry: ${fmt(
-        entry,
-        data.pair
-      )}\n` +
-
-      `Entry Zone: ${fmt(
-        entryLow,
-        data.pair
-      )} - ${fmt(
-        entryHigh,
-        data.pair
-      )}\n` +
-
-      `SL: ${fmt(
-        sl,
-        data.pair
-      )}\n` +
-
-      `TP1: ${fmt(
-        tp1,
-        data.pair
-      )}\n` +
-
-      `TP2: ${fmt(
-        tp2,
-        data.pair
-      )}\n` +
-
-      `TP3: ${fmt(
-        tp3,
-        data.pair
-      )}`
-
-    );
-
-
-    return;
-
+  if (marketsBox) {
+    marketsBox.innerHTML = "";
   }
 
+  let results = [];
+  let setups = 0;
 
-  if (
-    mode === "REAL"
-  ) {
-
-    const confirmed =
-      confirm(
-
-        `REAL TRADE WARNING\n\n` +
-
-        `${signal} ${data.pair}\n\n` +
-
-        `Entry: ${fmt(
-          entry,
-          data.pair
-        )}\n` +
-
-        `SL: ${fmt(
-          sl,
-          data.pair
-        )}\n` +
-
-        `TP1: ${fmt(
-          tp1,
-          data.pair
-        )}\n` +
-
-        `TP2: ${fmt(
-          tp2,
-          data.pair
-        )}\n` +
-
-        `TP3: ${fmt(
-          tp3,
-          data.pair
-        )}\n\n` +
-
-        `Continue?`
-
-      );
-
-
-    if (!confirmed) {
-
-      return;
-
-    }
-
-  }
-
+  const confidenceValues = [];
 
   try {
+    // Scanner uses 15M.
+    // One request per market.
+    for (
+      const pair of markets
+    ) {
+      try {
+        const data =
+          await analyze(
+            pair,
+            "15M"
+          );
 
-    const response =
-      await fetch(
-        "/api/trade",
-        {
-          method: "POST",
+        results.push(data);
 
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
+        if (
+          data.signal === "BUY" ||
+          data.signal === "SELL"
+        ) {
+          setups++;
+        }
 
-          body:
-            JSON.stringify({
+        if (
+          Number.isFinite(
+            Number(
+              data.confidence
+            )
+          )
+        ) {
+          confidenceValues.push(
+            Number(
+              data.confidence
+            )
+          );
+        }
 
-              mode,
+        if (marketsBox) {
+          marketsBox.insertAdjacentHTML(
+            "beforeend",
+            card(data)
+          );
+        }
 
-              symbol:
-                data.pair,
+      } catch (error) {
+        console.error(
+          `Scanner error for ${pair}:`,
+          error
+        );
 
-              side:
-                signal,
+        if (marketsBox) {
+          marketsBox.insertAdjacentHTML(
+            "beforeend",
+            `
+              <div class="card">
 
-              entry,
+                <div class="pairrow">
+                  <b>${pair}</b>
+                  <span class="pill wait">
+                    ERROR
+                  </span>
+                </div>
 
-              entryLow,
+                <div
+                  class="muted"
+                  style="margin-top:8px"
+                >
+                  ${error.message}
+                </div>
 
-              entryHigh,
+              </div>
+            `
+          );
+        }
+      }
+    }
 
-              stopLoss:
-                sl,
+    const avg =
+      confidenceValues.length
+        ? Math.round(
+            confidenceValues.reduce(
+              (a, b) => a + b,
+              0
+            ) /
+            confidenceValues.length
+          ) + "%"
+        : "—";
 
-              takeProfit1:
-                tp1,
+    setScannerStats(
+      results.length,
+      setups,
+      avg
+    );
 
-              takeProfit2:
-               
+    setStatus(
+      "● LIVE MARKET DATA"
+    );
+
+  } catch (error) {
+    console.error(
+      "Scanner error:",
+      error
+    );
+
+    setStatus(
+      "● LIVE MARKET DATA"
+    );
+
+    alert(
+      error.message ||
+      "Unable to scan live market data."
+    );
+
+  } finally {
+    scanRunning = false;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "↻ Scan Markets";
+    }
+  }
+}
+
+// =====================================================
+// SELECTED MARKET ANALYSIS
+// Uses full MTF engine
+// =====================================================
+
+async function analyzeSelected() {
+  const pairSelect =
+    document.querySelector(
+      "#pair"
+    );
+
+  const tfSelect =
+    document.querySelector(
+      "#tf"
+    );
+
+  const button =
+    document.querySelector(
+      "#analyze"
+    );
+
+  const signalBox =
+    document.querySelector(
+      "#signal"
+    );
+
+  const pair =
+    pairSelect
+      ? pairSelect.value
+      : "EUR/USD";
+
+  const selectedTF =
+    tfSelect
+      ? tfSelect.value
+      : "15M";
+
+  if (button) {
+    button.disabled = true;
+    button.textContent =
+      "Analyzing live data...";
+  }
+
+  setStatus(
+    "● LIVE MARKET DATA • ANALYZING"
+  );
+
+  if (signalBox) {
+    signalBox.innerHTML = `
+      <div class="signal-top">
+        <span class="pill wait">
+          WAIT
+        </span>
+        <span id="time">
+          LIVE
+        </span>
+      </div>
+
+      <h2>
+        Analyzing ${pair}
+      </h2>
+
+      <p class="muted">
+        MOGRI AI is checking 4H, 1H, 15M and 5M
+        market structure and confirmation.
+      </p>
+    `;
+  }
+
+  try {
+    /*
+      Full MTF analysis is used for the main signal.
+      The selected timeframe is retained for the UI,
+      while the engine confirms the setup across
+      4H → 1H → 15M → 5M.
+    */
+
+    const data =
+      await analyzeMTF(
+        pair
+      );
+
+    data.selectedTF =
+      selectedTF;
+
+    show(data);
+
+    setStatus(
+      "● LIVE MARKET DATA"
+    );
+
+  } catch (error) {
+    console.error(
+      "Selected analysis error:",
+      error
+    );
+
+    setStatus(
+      "● LIVE MARKET DATA"
+    );
+
+    if (signalBox) {
+      signalBox.innerHTML = `
+        <div class="signal-top">
+          <span class="pill wait">
+            WAIT
+          </span>
+          <span id="time">
+            ERROR
+          </span>
+        </div>
+
+        <h2>
+          Live analysis unavailable
+        </h2>
+
+        <p class="muted">
+          ${error.message}
+        </p>
+
+        <div
+          style="
+            margin-top:14px;
+            padding:12px;
+            border-radius:8px;
+            background:rgba(255,255,255,.03);
+          "
+        >
+          <b>LIVE MARKET DATA</b>
+
+          <div
+            class="muted"
+            style="margin-top:5px"
+          >
+            Check your Twelve Data quota or wait
+            for the API limit to reset.
+          </div>
+        </div>
+      `;
+    }
+
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "Analyze Selected";
+    }
+  }
+}
+
+// =====================================================
+// INITIALIZE
+// =====================================================
+
+function initializeMogriAI() {
+  cleanOldDemoText();
+
+  setStatus(
+    "● LIVE MARKET DATA"
+  );
+
+  startLiveClock();
+
+  renderHistory();
+
+  const scanButton =
+    document.querySelector(
+      "#scan"
+    );
+
+  const analyzeButton =
+    document.querySelector(
+      "#analyze"
+    );
+
+  if (scanButton) {
+    scanButton.addEventListener(
+      "click",
+      scan
+    );
+  }
+
+  if (analyzeButton) {
+    analyzeButton.addEventListener(
+      "click",
+      analyzeSelected
+    );
+  }
+
+  // Keep page quiet on load.
+  // User presses Scan Markets or Analyze Selected.
+  console.log(
+    "MOGRI AI initialized — LIVE MARKET DATA"
+  );
+}
+
+// =====================================================
+// START
+// =====================================================
+
+if (
+  document.readyState ===
+  "loading"
+) {
+  document.addEventListener(
+    "DOMContentLoaded",
+    initializeMogriAI
+  );
+} else {
+  initializeMogriAI();
+}
