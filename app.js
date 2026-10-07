@@ -24,51 +24,64 @@ const tfMap = {
 // =====================================================
 
 const CACHE_TIME = 60 * 1000;
+
 const marketCache = new Map();
+
+// Authoritative results produced by Scan Markets
+const scannerResults = new Map();
 
 let scanRunning = false;
 let currentSignal = null;
 
 // =====================================================
 // PAGE TEXT CLEANUP
-// Removes old DEMO / PAPER wording from index.html
 // =====================================================
 
 function cleanOldDemoText() {
-  // Header status
+
   document.querySelectorAll(".demo").forEach(el => {
     el.textContent = "● LIVE MARKET DATA";
   });
 
-  // Old signal placeholder
-  const signal = document.querySelector("#signal");
+  const signal =
+    document.querySelector("#signal");
 
   if (signal) {
-    const paragraph = signal.querySelector("p");
+
+    const paragraph =
+      signal.querySelector("p");
 
     if (paragraph) {
+
       paragraph.textContent =
         "Live market data analyzed using market structure, FVG, liquidity, momentum and multi-timeframe confirmation.";
+
     }
   }
 
-  // Footer
-  const footer = document.querySelector("footer");
+  const footer =
+    document.querySelector("footer");
 
   if (footer) {
+
     footer.textContent =
       "MOGRI AI • LIVE MARKET DATA • SIGNAL ANALYSIS";
+
   }
 
-  // Remove any old trading-mode selector created by the previous app.js
-  const oldMode = document.querySelector("#mogriModeWrapper");
+  const oldMode =
+    document.querySelector(
+      "#mogriModeWrapper"
+    );
 
   if (oldMode) {
     oldMode.remove();
   }
 
   const oldTradeButton =
-    document.querySelector("#mogriPlaceTrade");
+    document.querySelector(
+      "#mogriPlaceTrade"
+    );
 
   if (oldTradeButton) {
     oldTradeButton.remove();
@@ -79,10 +92,18 @@ function cleanOldDemoText() {
 // LIVE STATUS
 // =====================================================
 
-function setStatus(message = "● LIVE MARKET DATA") {
-  document.querySelectorAll(".demo").forEach(el => {
-    el.textContent = message;
-  });
+function setStatus(
+  message = "● LIVE MARKET DATA"
+) {
+
+  document
+    .querySelectorAll(".demo")
+    .forEach(el => {
+
+      el.textContent =
+        message;
+
+    });
 }
 
 // =====================================================
@@ -90,64 +111,102 @@ function setStatus(message = "● LIVE MARKET DATA") {
 // =====================================================
 
 function updateLiveClock() {
-  const now = new Date();
 
-  const time = now.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
+  const now =
+    new Date();
+
+  const time =
+    now.toLocaleTimeString(
+      [],
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }
+    );
 
   document
     .querySelectorAll(
       "#clock, #time, .clock, .time, .current-time"
     )
     .forEach(el => {
-      el.textContent = time;
+
+      el.textContent =
+        time;
+
     });
 }
 
 function startLiveClock() {
+
   updateLiveClock();
 
-  setInterval(updateLiveClock, 1000);
+  setInterval(
+    updateLiveClock,
+    1000
+  );
 }
 
 // =====================================================
 // FORMAT PRICE
 // =====================================================
 
-function fmt(value, pair) {
+function fmt(
+  value,
+  pair
+) {
+
   if (
     value === undefined ||
     value === null ||
-    !Number.isFinite(Number(value))
+    !Number.isFinite(
+      Number(value)
+    )
   ) {
+
     return "—";
+
   }
 
-  if (pair === "XAU/USD") {
-    return Number(value).toFixed(2);
+  if (
+    pair === "XAU/USD"
+  ) {
+
+    return Number(value)
+      .toFixed(2);
+
   }
 
-  return Number(value).toFixed(5);
+  return Number(value)
+    .toFixed(5);
 }
 
 // =====================================================
 // CONDITION HELPER
 // =====================================================
 
-function conditionExists(value) {
+function conditionExists(
+  value
+) {
+
   if (
     value === undefined ||
     value === null ||
     value === false
   ) {
+
     return false;
+
   }
 
-  if (typeof value === "string") {
-    const normalized = value.trim().toUpperCase();
+  if (
+    typeof value === "string"
+  ) {
+
+    const normalized =
+      value
+        .trim()
+        .toUpperCase();
 
     if (
       normalized === "" ||
@@ -156,7 +215,9 @@ function conditionExists(value) {
       normalized === "NO" ||
       normalized === "FALSE"
     ) {
+
       return false;
+
     }
   }
 
@@ -167,31 +228,59 @@ function conditionExists(value) {
 // CACHE
 // =====================================================
 
-function cacheKey(pair, tf) {
+function cacheKey(
+  pair,
+  tf
+) {
+
   return `${pair}_${tf}`;
+
 }
 
-function getCached(pair, tf) {
-  const key = cacheKey(pair, tf);
-  const item = marketCache.get(key);
+function getCached(
+  pair,
+  tf
+) {
+
+  const key =
+    cacheKey(pair, tf);
+
+  const item =
+    marketCache.get(key);
 
   if (!item) {
     return null;
   }
 
-  const age = Date.now() - item.time;
+  const age =
+    Date.now() -
+    item.time;
 
-  if (age > CACHE_TIME) {
+  if (
+    age > CACHE_TIME
+  ) {
+
     marketCache.delete(key);
+
     return null;
+
   }
 
-  console.log("Using cached data:", pair, tf);
+  console.log(
+    "Using cached data:",
+    pair,
+    tf
+  );
 
   return item.data;
 }
 
-function saveCache(pair, tf, data) {
+function saveCache(
+  pair,
+  tf,
+  data
+) {
+
   marketCache.set(
     cacheKey(pair, tf),
     {
@@ -199,27 +288,140 @@ function saveCache(pair, tf, data) {
       data
     }
   );
+
+}
+
+// =====================================================
+// SCANNER RESULT STORAGE
+//
+// IMPORTANT:
+// The scanner result becomes the authoritative result
+// for Analyze Selected.
+// =====================================================
+
+function saveScannerResult(
+  data
+) {
+
+  if (
+    !data ||
+    !data.pair
+  ) {
+
+    return;
+
+  }
+
+  try {
+
+    scannerResults.set(
+      data.pair,
+      {
+        savedAt: Date.now(),
+        data:
+          structuredClone(data)
+      }
+    );
+
+  } catch {
+
+    scannerResults.set(
+      data.pair,
+      {
+        savedAt: Date.now(),
+        data
+      }
+    );
+
+  }
+
+  window.mogriScannerResults =
+    scannerResults;
+
+  console.log(
+    "Saved scanner result:",
+    data.pair,
+    data.signal,
+    data.confidence
+  );
+}
+
+function getScannerResult(
+  pair
+) {
+
+  const item =
+    scannerResults.get(pair);
+
+  if (!item) {
+
+    return null;
+
+  }
+
+  const age =
+    Date.now() -
+    item.savedAt;
+
+  if (
+    age > CACHE_TIME
+  ) {
+
+    scannerResults.delete(
+      pair
+    );
+
+    return null;
+
+  }
+
+  try {
+
+    return structuredClone(
+      item.data
+    );
+
+  } catch {
+
+    return item.data;
+
+  }
 }
 
 // =====================================================
 // API ERROR HANDLING
 // =====================================================
 
-async function parseResponse(response, fallbackMessage) {
+async function parseResponse(
+  response,
+  fallbackMessage
+) {
+
   let data;
 
   try {
-    data = await response.json();
+
+    data =
+      await response.json();
+
   } catch {
+
     throw new Error(
       "Invalid response from market server."
     );
+
   }
 
-  if (!response.ok || data.error) {
+  if (
+    !response.ok ||
+    data.error
+  ) {
+
     throw new Error(
-      data.error || fallbackMessage
+      data.error ||
+      fallbackMessage
     );
+
   }
 
   return data;
@@ -227,44 +429,88 @@ async function parseResponse(response, fallbackMessage) {
 
 // =====================================================
 // SINGLE TIMEFRAME MARKET DATA
-// Used by Market Scanner
-// One request per market
+// Scanner uses this.
 // =====================================================
 
-async function analyze(pair, tf) {
-  const interval = tfMap[tf] || "15min";
+async function analyze(
+  pair,
+  tf
+) {
 
-  const cached = getCached(pair, tf);
+  const interval =
+    tfMap[tf] ||
+    "15min";
+
+  const cached =
+    getCached(
+      pair,
+      tf
+    );
 
   if (cached) {
+
     return cached;
+
   }
 
-  const key = cacheKey(pair, tf);
-  const loadingKey = `${key}_loading`;
+  const key =
+    cacheKey(
+      pair,
+      tf
+    );
 
-  if (marketCache.has(loadingKey)) {
-    return await marketCache.get(loadingKey);
-  }
+  const loadingKey =
+    `${key}_loading`;
 
-  const request = fetch(
-    `/api/market?symbol=${encodeURIComponent(
-      pair
-    )}&interval=${encodeURIComponent(interval)}`
-  )
-    .then(response =>
-      parseResponse(
-        response,
-        "Failed to load live market data."
-      )
+  if (
+    marketCache.has(
+      loadingKey
     )
-    .then(data => {
-      saveCache(pair, tf, data);
-      return data;
-    })
-    .finally(() => {
-      marketCache.delete(loadingKey);
-    });
+  ) {
+
+    return await marketCache.get(
+      loadingKey
+    );
+
+  }
+
+  const request =
+    fetch(
+      `/api/market?symbol=${encodeURIComponent(
+        pair
+      )}&interval=${encodeURIComponent(
+        interval
+      )}`
+    )
+      .then(
+        response =>
+          parseResponse(
+            response,
+            "Failed to load live market data."
+          )
+      )
+      .then(
+        data => {
+
+          saveCache(
+            pair,
+            tf,
+            data
+          );
+
+          return data;
+
+        }
+      )
+      .finally(
+        () => {
+
+          marketCache.delete(
+            loadingKey
+          );
+
+        }
+      );
 
   marketCache.set(
     loadingKey,
@@ -276,46 +522,89 @@ async function analyze(pair, tf) {
 
 // =====================================================
 // MULTI-TIMEFRAME ANALYSIS
-// 4H → 1H → 15M → 5M
+//
+// Kept available for future use.
+// Analyze Selected now prefers the exact scanner
+// result so signal/confidence cannot change.
 // =====================================================
 
-async function analyzeMTF(pair) {
-  const cached = getCached(pair, "MTF");
+async function analyzeMTF(
+  pair
+) {
+
+  const cached =
+    getCached(
+      pair,
+      "MTF"
+    );
 
   if (cached) {
+
     console.log(
       "Using cached MTF data:",
       pair
     );
 
     return cached;
+
   }
 
-  const key = cacheKey(pair, "MTF");
-  const loadingKey = `${key}_loading`;
+  const key =
+    cacheKey(
+      pair,
+      "MTF"
+    );
 
-  if (marketCache.has(loadingKey)) {
-    return await marketCache.get(loadingKey);
-  }
+  const loadingKey =
+    `${key}_loading`;
 
-  const request = fetch(
-    `/api/market?symbol=${encodeURIComponent(
-      pair
-    )}&mtf=true`
-  )
-    .then(response =>
-      parseResponse(
-        response,
-        "Multi-timeframe analysis failed."
-      )
+  if (
+    marketCache.has(
+      loadingKey
     )
-    .then(data => {
-      saveCache(pair, "MTF", data);
-      return data;
-    })
-    .finally(() => {
-      marketCache.delete(loadingKey);
-    });
+  ) {
+
+    return await marketCache.get(
+      loadingKey
+    );
+
+  }
+
+  const request =
+    fetch(
+      `/api/market?symbol=${encodeURIComponent(
+        pair
+      )}&mtf=true`
+    )
+      .then(
+        response =>
+          parseResponse(
+            response,
+            "Multi-timeframe analysis failed."
+          )
+      )
+      .then(
+        data => {
+
+          saveCache(
+            pair,
+            "MTF",
+            data
+          );
+
+          return data;
+
+        }
+      )
+      .finally(
+        () => {
+
+          marketCache.delete(
+            loadingKey
+          );
+
+        }
+      );
 
   marketCache.set(
     loadingKey,
@@ -329,13 +618,24 @@ async function analyzeMTF(pair) {
 // SIGNAL CLASS
 // =====================================================
 
-function signalClass(signal) {
-  if (signal === "BUY") {
+function signalClass(
+  signal
+) {
+
+  if (
+    signal === "BUY"
+  ) {
+
     return "buy";
+
   }
 
-  if (signal === "SELL") {
+  if (
+    signal === "SELL"
+  ) {
+
     return "sell";
+
   }
 
   return "wait";
@@ -345,37 +645,70 @@ function signalClass(signal) {
 // SIGNAL REASONS
 // =====================================================
 
-function buildReasons(data) {
+function buildReasons(
+  data
+) {
+
   const reasons = [];
 
-  if (conditionExists(data.structure)) {
+  if (
+    conditionExists(
+      data.structure
+    )
+  ) {
+
     reasons.push(
       `Market structure: ${data.structure}`
     );
+
   }
 
-  if (conditionExists(data.bos)) {
+  if (
+    conditionExists(
+      data.bos
+    )
+  ) {
+
     reasons.push(
       `BOS/CHoCH: ${data.bos}`
     );
+
   }
 
-  if (conditionExists(data.liquidity)) {
+  if (
+    conditionExists(
+      data.liquidity
+    )
+  ) {
+
     reasons.push(
       `Liquidity: ${data.liquidity}`
     );
+
   }
 
-  if (conditionExists(data.fvg)) {
+  if (
+    conditionExists(
+      data.fvg
+    )
+  ) {
+
     reasons.push(
       `FVG: ${data.fvg}`
     );
+
   }
 
-  if (conditionExists(data.momentum)) {
+  if (
+    conditionExists(
+      data.momentum
+    )
+  ) {
+
     reasons.push(
       `Momentum: ${data.momentum}`
     );
+
   }
 
   return reasons;
@@ -385,55 +718,106 @@ function buildReasons(data) {
 // MTF REASONS
 // =====================================================
 
-function buildMTFReasons(data) {
+function buildMTFReasons(
+  data
+) {
+
   const reasons = [];
 
-  if (conditionExists(data.h4Bias)) {
+  if (
+    conditionExists(
+      data.h4Bias
+    )
+  ) {
+
     reasons.push(
       `4H bias: ${data.h4Bias}`
     );
+
   }
 
-  if (conditionExists(data.h1Structure)) {
+  if (
+    conditionExists(
+      data.h1Structure
+    )
+  ) {
+
     reasons.push(
       `1H structure: ${data.h1Structure}`
     );
+
   }
 
-  if (conditionExists(data.m15Structure)) {
+  if (
+    conditionExists(
+      data.m15Structure
+    )
+  ) {
+
     reasons.push(
       `15M structure: ${data.m15Structure}`
     );
+
   }
 
-  if (conditionExists(data.m5Structure)) {
+  if (
+    conditionExists(
+      data.m5Structure
+    )
+  ) {
+
     reasons.push(
       `5M structure: ${data.m5Structure}`
     );
+
   }
 
-  if (conditionExists(data.m5BOS)) {
+  if (
+    conditionExists(
+      data.m5BOS
+    )
+  ) {
+
     reasons.push(
       `5M BOS/CHoCH: ${data.m5BOS}`
     );
+
   }
 
-  if (conditionExists(data.m5Liquidity)) {
+  if (
+    conditionExists(
+      data.m5Liquidity
+    )
+  ) {
+
     reasons.push(
       `5M liquidity: ${data.m5Liquidity}`
     );
+
   }
 
-  if (conditionExists(data.m5FVG)) {
+  if (
+    conditionExists(
+      data.m5FVG
+    )
+  ) {
+
     reasons.push(
       `5M FVG: ${data.m5FVG}`
     );
+
   }
 
-  if (conditionExists(data.m5Momentum)) {
+  if (
+    conditionExists(
+      data.m5Momentum
+    )
+  ) {
+
     reasons.push(
       `5M momentum: ${data.m5Momentum}`
     );
+
   }
 
   return reasons;
@@ -443,13 +827,18 @@ function buildMTFReasons(data) {
 // TRADE LEVELS HTML
 // =====================================================
 
-function levelsHTML(data) {
-  const signal = data.signal;
+function levelsHTML(
+  data
+) {
+
+  const signal =
+    data.signal;
 
   if (
     signal !== "BUY" &&
     signal !== "SELL"
   ) {
+
     return `
       <div
         style="
@@ -460,15 +849,22 @@ function levelsHTML(data) {
           border:1px solid rgba(255,255,255,.06);
         "
       >
-        <b>WAITING FOR CLEAN SETUP</b>
+
+        <b>
+          WAITING FOR CLEAN SETUP
+        </b>
+
         <div
           class="muted"
           style="margin-top:6px"
         >
-          No confirmed entry, stop loss or take-profit levels yet.
+          No confirmed entry, stop loss or
+          take-profit levels yet.
         </div>
+
       </div>
     `;
+
   }
 
   return `
@@ -481,56 +877,100 @@ function levelsHTML(data) {
         border:1px solid rgba(255,255,255,.06);
       "
     >
-      <b>TRADE LEVELS</b>
+
+      <b>
+        TRADE LEVELS
+      </b>
 
       <div
         style="
           display:grid;
-          grid-template-columns:repeat(2,minmax(0,1fr));
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
           gap:10px;
           margin-top:12px;
         "
       >
 
         <div>
-          <small>ENTRY ZONE</small>
+          <small>
+            ENTRY ZONE
+          </small>
+
           <br>
+
           <b>
-            ${fmt(data.entryLow, data.pair)}
+            ${fmt(
+              data.entryLow,
+              data.pair
+            )}
+
             -
-            ${fmt(data.entryHigh, data.pair)}
+
+            ${fmt(
+              data.entryHigh,
+              data.pair
+            )}
           </b>
         </div>
 
         <div>
-          <small>STOP LOSS</small>
+          <small>
+            STOP LOSS
+          </small>
+
           <br>
+
           <b>
-            ${fmt(data.sl, data.pair)}
+            ${fmt(
+              data.sl,
+              data.pair
+            )}
           </b>
         </div>
 
         <div>
-          <small>TAKE PROFIT 1</small>
+          <small>
+            TAKE PROFIT 1
+          </small>
+
           <br>
+
           <b>
-            ${fmt(data.tp1, data.pair)}
+            ${fmt(
+              data.tp1,
+              data.pair
+            )}
           </b>
         </div>
 
         <div>
-          <small>TAKE PROFIT 2</small>
+          <small>
+            TAKE PROFIT 2
+          </small>
+
           <br>
+
           <b>
-            ${fmt(data.tp2, data.pair)}
+            ${fmt(
+              data.tp2,
+              data.pair
+            )}
           </b>
         </div>
 
         <div>
-          <small>TAKE PROFIT 3</small>
+          <small>
+            TAKE PROFIT 3
+          </small>
+
           <br>
+
           <b>
-            ${fmt(data.tp3, data.pair)}
+            ${fmt(
+              data.tp3,
+              data.pair
+            )}
           </b>
         </div>
 
@@ -540,8 +980,10 @@ function levelsHTML(data) {
         class="muted"
         style="margin-top:12px"
       >
-        Execute orders manually in your broker/MT5.
+        Execute orders manually in your
+        broker/MT5.
       </div>
+
     </div>
   `;
 }
@@ -550,7 +992,10 @@ function levelsHTML(data) {
 // ANALYSIS DETAILS
 // =====================================================
 
-function analysisDetailsHTML(data) {
+function analysisDetailsHTML(
+  data
+) {
+
   const isMTF =
     data.tf === "MTF";
 
@@ -571,39 +1016,61 @@ function analysisDetailsHTML(data) {
     >
 
       <b>
-        ${isMTF
-          ? "MULTI-TIMEFRAME ANALYSIS"
-          : "MARKET ANALYSIS"}
+        ${
+          isMTF
+            ? "MULTI-TIMEFRAME ANALYSIS"
+            : "MARKET ANALYSIS"
+        }
       </b>
 
       <div
         style="
           display:grid;
-          grid-template-columns:repeat(2,minmax(0,1fr));
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
           gap:10px;
           margin-top:12px;
         "
       >
 
         <div>
-          <small>PRICE</small>
+          <small>
+            PRICE
+          </small>
+
           <br>
+
           <b>
-            ${fmt(data.price, data.pair)}
+            ${fmt(
+              data.price,
+              data.pair
+            )}
           </b>
         </div>
 
         <div>
-          <small>TIMEFRAME</small>
+          <small>
+            TIMEFRAME
+          </small>
+
           <br>
+
           <b>
-            ${data.tf || "—"}
+            ${
+              data.tf ||
+              data.selectedTF ||
+              "—"
+            }
           </b>
         </div>
 
         <div>
-          <small>STRUCTURE</small>
+          <small>
+            STRUCTURE
+          </small>
+
           <br>
+
           <b>
             ${
               data.structure ||
@@ -614,8 +1081,12 @@ function analysisDetailsHTML(data) {
         </div>
 
         <div>
-          <small>BOS / CHOCH</small>
+          <small>
+            BOS / CHOCH
+          </small>
+
           <br>
+
           <b>
             ${
               data.bos ||
@@ -626,8 +1097,12 @@ function analysisDetailsHTML(data) {
         </div>
 
         <div>
-          <small>LIQUIDITY</small>
+          <small>
+            LIQUIDITY
+          </small>
+
           <br>
+
           <b>
             ${
               data.liquidity ||
@@ -638,8 +1113,12 @@ function analysisDetailsHTML(data) {
         </div>
 
         <div>
-          <small>FVG</small>
+          <small>
+            FVG
+          </small>
+
           <br>
+
           <b>
             ${
               data.fvg ||
@@ -658,21 +1137,40 @@ function analysisDetailsHTML(data) {
               style="
                 margin-top:12px;
                 display:grid;
-                grid-template-columns:repeat(2,minmax(0,1fr));
+                grid-template-columns:
+                  repeat(2,minmax(0,1fr));
                 gap:10px;
               "
             >
 
               <div>
-                <small>BULL SCORE</small>
+                <small>
+                  BULL SCORE
+                </small>
+
                 <br>
-                <b>${data.bullScore ?? "—"}</b>
+
+                <b>
+                  ${
+                    data.bullScore ??
+                    "—"
+                  }
+                </b>
               </div>
 
               <div>
-                <small>BEAR SCORE</small>
+                <small>
+                  BEAR SCORE
+                </small>
+
                 <br>
-                <b>${data.bearScore ?? "—"}</b>
+
+                <b>
+                  ${
+                    data.bearScore ??
+                    "—"
+                  }
+                </b>
               </div>
 
             </div>
@@ -680,8 +1178,13 @@ function analysisDetailsHTML(data) {
           : ""
       }
 
-      <div style="margin-top:14px">
-        <b>CONFIRMATIONS</b>
+      <div
+        style="margin-top:14px"
+      >
+
+        <b>
+          CONFIRMATIONS
+        </b>
 
         ${
           reasons.length
@@ -692,12 +1195,16 @@ function analysisDetailsHTML(data) {
                   padding-left:20px;
                 "
               >
+
                 ${reasons
                   .map(
                     reason =>
-                      `<li style="margin-bottom:5px">${reason}</li>`
+                      `<li style="margin-bottom:5px">
+                        ${reason}
+                      </li>`
                   )
                   .join("")}
+
               </ul>
             `
             : `
@@ -705,7 +1212,8 @@ function analysisDetailsHTML(data) {
                 class="muted"
                 style="margin-top:7px"
               >
-                Waiting for stronger market confirmation.
+                Waiting for stronger
+                market confirmation.
               </div>
             `
         }
@@ -718,10 +1226,12 @@ function analysisDetailsHTML(data) {
 
 // =====================================================
 // ORDER BLOCK UI
-// Compatible with current/new API versions
 // =====================================================
 
-function orderBlockHTML(data) {
+function orderBlockHTML(
+  data
+) {
+
   const type =
     data.m5OBType ||
     data.obType ||
@@ -755,21 +1265,34 @@ function orderBlockHTML(data) {
     "No confirmed Order Block";
 
   if (hasOB) {
-    if (status === "IN_ZONE") {
+
+    if (
+      status === "IN_ZONE"
+    ) {
+
       message =
         "PRICE INSIDE ORDER BLOCK";
+
     } else if (
       status === "ABOVE_ZONE" ||
       status === "BELOW_ZONE"
     ) {
+
       message =
         "WAITING FOR OB RETEST";
-    } else if (status === "AWAY") {
+
+    } else if (
+      status === "AWAY"
+    ) {
+
       message =
         "ORDER BLOCK AWAY FROM PRICE";
+
     } else {
+
       message =
         "ORDER BLOCK DETECTED";
+
     }
   }
 
@@ -793,48 +1316,87 @@ function orderBlockHTML(data) {
           margin-bottom:10px;
         "
       >
-        <b>ORDER BLOCK</b>
 
-        <span class="pill ${
-          type === "BULLISH"
-            ? "buy"
-            : type === "BEARISH"
-            ? "sell"
-            : "wait"
-        }">
-          ${hasOB ? type : "NONE"}
+        <b>
+          ORDER BLOCK
+        </b>
+
+        <span
+          class="pill ${
+            type === "BULLISH"
+              ? "buy"
+              : type === "BEARISH"
+              ? "sell"
+              : "wait"
+          }"
+        >
+          ${
+            hasOB
+              ? type
+              : "NONE"
+          }
         </span>
+
       </div>
 
       <div
         style="
           display:grid;
-          grid-template-columns:repeat(2,minmax(0,1fr));
+          grid-template-columns:
+            repeat(2,minmax(0,1fr));
           gap:9px;
         "
       >
 
         <div>
-          <small>OB HIGH</small>
+          <small>
+            OB HIGH
+          </small>
+
           <br>
-          <b>${fmt(high, data.pair)}</b>
+
+          <b>
+            ${fmt(
+              high,
+              data.pair
+            )}
+          </b>
         </div>
 
         <div>
-          <small>OB LOW</small>
+          <small>
+            OB LOW
+          </small>
+
           <br>
-          <b>${fmt(low, data.pair)}</b>
+
+          <b>
+            ${fmt(
+              low,
+              data.pair
+            )}
+          </b>
         </div>
 
         <div>
-          <small>STATUS</small>
+          <small>
+            STATUS
+          </small>
+
           <br>
-          <b>${status}</b>
+
+          <b>
+            ${status}
+          </b>
         </div>
 
         <div>
-          <small>STRENGTH</small>
+          <small>
+            STRENGTH
+          </small>
+
           <br>
+
           <b>
             ${
               strength === null ||
@@ -862,15 +1424,23 @@ function orderBlockHTML(data) {
 // SCANNER CARD
 // =====================================================
 
-function card(data) {
+function card(
+  data
+) {
+
   const signal =
-    data.signal || "WAIT";
+    data.signal ||
+    "WAIT";
 
   const className =
-    signalClass(signal);
+    signalClass(
+      signal
+    );
 
   const confidence =
-    Number(data.confidence || 0);
+    Number(
+      data.confidence || 0
+    );
 
   const obType =
     data.m5OBType ||
@@ -891,13 +1461,16 @@ function card(data) {
           ${data.pair}
         </b>
 
-        <span class="pill ${className}">
+        <span
+          class="pill ${className}"
+        >
           ${signal}
         </span>
 
       </div>
 
       <h3>
+
         ${confidence}%
 
         <span
@@ -908,9 +1481,11 @@ function card(data) {
         >
           confidence
         </span>
+
       </h3>
 
       <div class="bar">
+
         <i
           style="
             width:${Math.min(
@@ -919,6 +1494,7 @@ function card(data) {
             )}%
           "
         ></i>
+
       </div>
 
       <div class="mini">
@@ -928,9 +1504,12 @@ function card(data) {
         </span>
 
         <span>
+
           FVG
           ${
-            conditionExists(data.fvg)
+            conditionExists(
+              data.fvg
+            )
               ? "✓"
               : "—"
           }
@@ -939,10 +1518,13 @@ function card(data) {
 
           LIQ
           ${
-            conditionExists(data.liquidity)
+            conditionExists(
+              data.liquidity
+            )
               ? "✓"
               : "—"
           }
+
         </span>
 
       </div>
@@ -954,12 +1536,18 @@ function card(data) {
 
         <span>
           Structure:
-          ${data.structure || "NEUTRAL"}
+          ${
+            data.structure ||
+            "NEUTRAL"
+          }
         </span>
 
         <span>
           BOS:
-          ${data.bos || "NONE"}
+          ${
+            data.bos ||
+            "NONE"
+          }
         </span>
 
       </div>
@@ -980,6 +1568,89 @@ function card(data) {
 
       </div>
 
+      ${
+        signal === "BUY" ||
+        signal === "SELL"
+          ? `
+            <div
+              style="
+                margin-top:12px;
+                padding-top:10px;
+                border-top:
+                  1px solid
+                  rgba(255,255,255,.06);
+              "
+            >
+
+              <div class="mini">
+
+                <span>
+                  ENTRY
+                </span>
+
+                <b>
+                  ${
+                    fmt(
+                      data.entryLow,
+                      data.pair
+                    )
+                  }
+                  -
+                  ${
+                    fmt(
+                      data.entryHigh,
+                      data.pair
+                    )
+                  }
+                </b>
+
+              </div>
+
+              <div
+                class="mini"
+                style="margin-top:5px"
+              >
+
+                <span>
+                  SL
+                </span>
+
+                <b>
+                  ${
+                    fmt(
+                      data.sl,
+                      data.pair
+                    )
+                  }
+                </b>
+
+              </div>
+
+              <div
+                class="mini"
+                style="margin-top:5px"
+              >
+
+                <span>
+                  TP1
+                </span>
+
+                <b>
+                  ${
+                    fmt(
+                      data.tp1,
+                      data.pair
+                    )
+                  }
+                </b>
+
+              </div>
+
+            </div>
+          `
+          : ""
+      }
+
     </div>
   `;
 }
@@ -988,26 +1659,38 @@ function card(data) {
 // SHOW SIGNAL
 // =====================================================
 
-function show(data) {
-  currentSignal = data;
+function show(
+  data
+) {
 
-  window.mogriCurrentSignal = data;
+  currentSignal =
+    data;
+
+  window.mogriCurrentSignal =
+    data;
 
   const signalBox =
-    document.querySelector("#signal");
+    document.querySelector(
+      "#signal"
+    );
 
   if (!signalBox) {
     return;
   }
 
   const signal =
-    data.signal || "WAIT";
+    data.signal ||
+    "WAIT";
 
   const confidence =
-    Number(data.confidence || 0);
+    Number(
+      data.confidence || 0
+    );
 
   const className =
-    signalClass(signal);
+    signalClass(
+      signal
+    );
 
   const signalTime =
     data.time
@@ -1019,9 +1702,12 @@ function show(data) {
   );
 
   signalBox.innerHTML = `
+
     <div class="signal-top">
 
-      <span class="pill ${className}">
+      <span
+        class="pill ${className}"
+      >
         ${signal}
       </span>
 
@@ -1032,14 +1718,21 @@ function show(data) {
     </div>
 
     <h2>
+
       ${data.pair || "Market"}
+
       •
+
       ${signal}
+
       ${
         data.tf === "MTF"
-          ? "MTF"
-          : data.tf || ""
+          ? " MTF"
+          : data.tf
+          ? ` ${data.tf}`
+          : ""
       }
+
     </h2>
 
     <div
@@ -1049,7 +1742,9 @@ function show(data) {
         margin-top:8px;
       "
     >
+
       ${confidence}%
+
     </div>
 
     <div
@@ -1068,13 +1763,19 @@ function show(data) {
         border:1px solid rgba(200,255,0,.12);
       "
     >
-      <b>● LIVE MARKET DATA</b>
+
+      <b>
+        ● LIVE MARKET DATA
+      </b>
+
       <div
         class="muted"
         style="margin-top:4px"
       >
-        MOGRI AI is analyzing current market conditions.
+        MOGRI AI is analyzing current
+        market conditions.
       </div>
+
     </div>
 
     ${levelsHTML(data)}
@@ -1090,9 +1791,13 @@ function show(data) {
         font-size:12px;
       "
     >
-      Signal is analytical only. Place any order manually
+
+      Signal is analytical only.
+      Place any order manually
       through your broker or MT5.
+
     </div>
+
   `;
 
   addHistory(data);
@@ -1103,56 +1808,91 @@ function show(data) {
 // =====================================================
 
 function getHistory() {
+
   try {
+
     return JSON.parse(
       localStorage.getItem(
         "mogriSignalHistory"
       ) || "[]"
     );
+
   } catch {
+
     return [];
+
   }
 }
 
-function saveHistory(history) {
+function saveHistory(
+  history
+) {
+
   localStorage.setItem(
     "mogriSignalHistory",
-    JSON.stringify(history)
+    JSON.stringify(
+      history
+    )
   );
+
 }
 
-function addHistory(data) {
+function addHistory(
+  data
+) {
+
   const history =
     getHistory();
 
   const item = {
-    pair: data.pair,
-    signal: data.signal,
-    confidence: data.confidence,
-    price: data.price,
+
+    pair:
+      data.pair,
+
+    signal:
+      data.signal,
+
+    confidence:
+      data.confidence,
+
+    price:
+      data.price,
+
     time:
       data.time ||
       new Date().toISOString()
+
   };
 
   const duplicate =
     history.length > 0 &&
-    history[0].pair === item.pair &&
-    history[0].signal === item.signal &&
-    history[0].time === item.time;
+    history[0].pair ===
+      item.pair &&
+    history[0].signal ===
+      item.signal &&
+    history[0].time ===
+      item.time;
 
   if (!duplicate) {
-    history.unshift(item);
+
+    history.unshift(
+      item
+    );
+
   }
 
   saveHistory(
-    history.slice(0, 20)
+    history.slice(
+      0,
+      20
+    )
   );
 
   renderHistory();
 }
 
 function renderHistory() {
+
   const container =
     document.querySelector(
       "#history"
@@ -1166,13 +1906,16 @@ function renderHistory() {
     getHistory();
 
   if (!history.length) {
+
     container.innerHTML = `
+
       <div
         class="muted"
         style="padding:12px 0"
       >
         No signals analyzed yet.
       </div>
+
     `;
 
     return;
@@ -1180,56 +1923,67 @@ function renderHistory() {
 
   container.innerHTML =
     history
-      .map(item => `
-        <div
-          style="
-            display:grid;
-            grid-template-columns:
-              1fr auto auto;
-            gap:10px;
-            align-items:center;
-            padding:11px 0;
-            border-bottom:
-              1px solid rgba(255,255,255,.05);
-          "
-        >
+      .map(
+        item => `
 
-          <div>
-            <b>${item.pair}</b>
+          <div
+            style="
+              display:grid;
+              grid-template-columns:
+                1fr auto auto;
+              gap:10px;
+              align-items:center;
+              padding:11px 0;
+              border-bottom:
+                1px solid
+                rgba(255,255,255,.05);
+            "
+          >
 
-            <div
-              class="muted"
-              style="font-size:11px"
-            >
-              ${
-                new Date(
-                  item.time
-                ).toLocaleString()
-              }
+            <div>
+
+              <b>
+                ${item.pair}
+              </b>
+
+              <div
+                class="muted"
+                style="font-size:11px"
+              >
+                ${
+                  new Date(
+                    item.time
+                  ).toLocaleString()
+                }
+              </div>
+
             </div>
+
+            <span
+              class="pill ${signalClass(
+                item.signal
+              )}"
+            >
+              ${item.signal}
+            </span>
+
+            <b>
+              ${
+                Number(
+                  item.confidence || 0
+                )
+              }%
+            </b>
+
           </div>
 
-          <span
-            class="pill ${signalClass(
-              item.signal
-            )}"
-          >
-            ${item.signal}
-          </span>
-
-          <b>
-            ${Number(
-              item.confidence || 0
-            )}%
-          </b>
-
-        </div>
-      `)
+        `
+      )
       .join("");
 }
 
 // =====================================================
-// SCANNER
+// SCANNER STATS
 // =====================================================
 
 function setScannerStats(
@@ -1237,6 +1991,7 @@ function setScannerStats(
   setups,
   confidence
 ) {
+
   const scannedEl =
     document.querySelector(
       "#scanned"
@@ -1253,27 +2008,39 @@ function setScannerStats(
     );
 
   if (scannedEl) {
+
     scannedEl.textContent =
       scanned;
+
   }
 
   if (setupsEl) {
+
     setupsEl.textContent =
       setups;
+
   }
 
   if (confidenceEl) {
+
     confidenceEl.textContent =
       confidence;
+
   }
 }
 
+// =====================================================
+// SCANNER
+// =====================================================
+
 async function scan() {
+
   if (scanRunning) {
     return;
   }
 
-  scanRunning = true;
+  scanRunning =
+    true;
 
   const button =
     document.querySelector(
@@ -1286,9 +2053,13 @@ async function scan() {
     );
 
   if (button) {
-    button.disabled = true;
+
+    button.disabled =
+      true;
+
     button.textContent =
       "Scanning live data...";
+
   }
 
   setStatus(
@@ -1296,34 +2067,59 @@ async function scan() {
   );
 
   if (marketsBox) {
-    marketsBox.innerHTML = "";
+
+    marketsBox.innerHTML =
+      "";
+
   }
 
   let results = [];
+
   let setups = 0;
 
-  const confidenceValues = [];
+  const confidenceValues =
+    [];
 
   try {
-    // Scanner uses 15M.
-    // One request per market.
+
+    // ================================================
+    // Scan all six markets using 15M.
+    // ================================================
+
     for (
       const pair of markets
     ) {
+
       try {
+
         const data =
           await analyze(
             pair,
             "15M"
           );
 
-        results.push(data);
+        // ============================================
+        // IMPORTANT:
+        // Store the EXACT scanner result.
+        // ============================================
+
+        saveScannerResult(
+          data
+        );
+
+        results.push(
+          data
+        );
 
         if (
-          data.signal === "BUY" ||
-          data.signal === "SELL"
+          data.signal ===
+            "BUY" ||
+          data.signal ===
+            "SELL"
         ) {
+
           setups++;
+
         }
 
         if (
@@ -1333,37 +2129,53 @@ async function scan() {
             )
           )
         ) {
+
           confidenceValues.push(
             Number(
               data.confidence
             )
           );
+
         }
 
         if (marketsBox) {
+
           marketsBox.insertAdjacentHTML(
             "beforeend",
             card(data)
           );
+
         }
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
+
         console.error(
           `Scanner error for ${pair}:`,
           error
         );
 
         if (marketsBox) {
+
           marketsBox.insertAdjacentHTML(
             "beforeend",
             `
+
               <div class="card">
 
                 <div class="pairrow">
-                  <b>${pair}</b>
-                  <span class="pill wait">
+
+                  <b>
+                    ${pair}
+                  </b>
+
+                  <span
+                    class="pill wait"
+                  >
                     ERROR
                   </span>
+
                 </div>
 
                 <div
@@ -1374,8 +2186,10 @@ async function scan() {
                 </div>
 
               </div>
+
             `
           );
+
         }
       }
     }
@@ -1384,7 +2198,11 @@ async function scan() {
       confidenceValues.length
         ? Math.round(
             confidenceValues.reduce(
-              (a, b) => a + b,
+              (
+                a,
+                b
+              ) =>
+                a + b,
               0
             ) /
             confidenceValues.length
@@ -1401,7 +2219,10 @@ async function scan() {
       "● LIVE MARKET DATA"
     );
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
+
     console.error(
       "Scanner error:",
       error
@@ -1417,22 +2238,34 @@ async function scan() {
     );
 
   } finally {
-    scanRunning = false;
+
+    scanRunning =
+      false;
 
     if (button) {
-      button.disabled = false;
+
+      button.disabled =
+        false;
+
       button.textContent =
         "↻ Scan Markets";
+
     }
   }
 }
 
 // =====================================================
 // SELECTED MARKET ANALYSIS
-// Uses full MTF engine
+//
+// IMPORTANT:
+// 1. First uses exact scanner result.
+// 2. Does NOT recalculate confidence.
+// 3. Does NOT change BUY/SELL/WAIT.
+// 4. Preserves entry/SL/TP from scanner.
 // =====================================================
 
 async function analyzeSelected() {
+
   const pairSelect =
     document.querySelector(
       "#pair"
@@ -1464,9 +2297,13 @@ async function analyzeSelected() {
       : "15M";
 
   if (button) {
-    button.disabled = true;
+
+    button.disabled =
+      true;
+
     button.textContent =
-      "Analyzing live data...";
+      "Loading signal...";
+
   }
 
   setStatus(
@@ -1474,42 +2311,111 @@ async function analyzeSelected() {
   );
 
   if (signalBox) {
+
     signalBox.innerHTML = `
+
       <div class="signal-top">
+
         <span class="pill wait">
           WAIT
         </span>
+
         <span id="time">
           LIVE
         </span>
+
       </div>
 
       <h2>
-        Analyzing ${pair}
+        Loading ${pair}
       </h2>
 
       <p class="muted">
-        MOGRI AI is checking 4H, 1H, 15M and 5M
-        market structure and confirmation.
+        Loading the latest MOGRI AI
+        scanner result.
       </p>
+
     `;
+
   }
 
   try {
-    /*
-      Full MTF analysis is used for the main signal.
-      The selected timeframe is retained for the UI,
-      while the engine confirms the setup across
-      4H → 1H → 15M → 5M.
-    */
 
-    const data =
-      await analyzeMTF(
+    // =================================================
+    // FIRST:
+    // Use exact scanner result.
+    // =================================================
+
+    let data =
+      getScannerResult(
         pair
+      );
+
+    if (data) {
+
+      console.log(
+        "Using EXACT scanner result:",
+        pair,
+        data.signal,
+        data.confidence
+      );
+
+      /*
+       * Do NOT change:
+       * signal
+       * confidence
+       * price
+       * entry
+       * SL
+       * TP1
+       * TP2
+       * TP3
+       */
+
+      data.selectedTF =
+        selectedTF;
+
+      data.analysisSource =
+        "SCANNER_RESULT";
+
+      show(data);
+
+      setStatus(
+        "● LIVE MARKET DATA"
+      );
+
+      return;
+    }
+
+    // =================================================
+    // No scanner result exists.
+    //
+    // In that situation, make ONE direct live
+    // request using the selected timeframe.
+    // =================================================
+
+    console.log(
+      "No scanner result found.",
+      "Running direct analysis:",
+      pair,
+      selectedTF
+    );
+
+    data =
+      await analyze(
+        pair,
+        selectedTF
       );
 
     data.selectedTF =
       selectedTF;
+
+    data.analysisSource =
+      "DIRECT_LIVE_ANALYSIS";
+
+    saveScannerResult(
+      data
+    );
 
     show(data);
 
@@ -1517,7 +2423,10 @@ async function analyzeSelected() {
       "● LIVE MARKET DATA"
     );
 
-  } catch (error) {
+  } catch (
+    error
+  ) {
+
     console.error(
       "Selected analysis error:",
       error
@@ -1528,14 +2437,19 @@ async function analyzeSelected() {
     );
 
     if (signalBox) {
+
       signalBox.innerHTML = `
+
         <div class="signal-top">
+
           <span class="pill wait">
             WAIT
           </span>
+
           <span id="time">
             ERROR
           </span>
+
         </div>
 
         <h2>
@@ -1554,24 +2468,38 @@ async function analyzeSelected() {
             background:rgba(255,255,255,.03);
           "
         >
-          <b>LIVE MARKET DATA</b>
+
+          <b>
+            LIVE MARKET DATA
+          </b>
 
           <div
             class="muted"
             style="margin-top:5px"
           >
-            Check your Twelve Data quota or wait
-            for the API limit to reset.
+
+            Check your Twelve Data quota
+            or wait for the API limit
+            to reset.
+
           </div>
+
         </div>
+
       `;
+
     }
 
   } finally {
+
     if (button) {
-      button.disabled = false;
+
+      button.disabled =
+        false;
+
       button.textContent =
         "Analyze Selected";
+
     }
   }
 }
@@ -1581,6 +2509,7 @@ async function analyzeSelected() {
 // =====================================================
 
 function initializeMogriAI() {
+
   cleanOldDemoText();
 
   setStatus(
@@ -1602,21 +2531,23 @@ function initializeMogriAI() {
     );
 
   if (scanButton) {
+
     scanButton.addEventListener(
       "click",
       scan
     );
+
   }
 
   if (analyzeButton) {
+
     analyzeButton.addEventListener(
       "click",
       analyzeSelected
     );
+
   }
 
-  // Keep page quiet on load.
-  // User presses Scan Markets or Analyze Selected.
   console.log(
     "MOGRI AI initialized — LIVE MARKET DATA"
   );
@@ -1630,10 +2561,14 @@ if (
   document.readyState ===
   "loading"
 ) {
+
   document.addEventListener(
     "DOMContentLoaded",
     initializeMogriAI
   );
+
 } else {
+
   initializeMogriAI();
+
 }
