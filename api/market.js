@@ -1,2120 +1,1073 @@
-// =====================================================
 // MOGRI AI FOREX SIGNAL ANALYZER
-// LIVE MARKET DATA • LIVE SIGNAL ANALYSIS
-// =====================================================
+// Server-side market analysis for Vercel
+// IMPORTANT: This file contains NO browser/document/window code.
 
-const markets = [
-  "EUR/USD",
-  "GBP/USD",
-  "USD/JPY",
-  "XAU/USD",
-  "USD/CAD",
-  "AUD/USD"
-];
-
-const tfMap = {
-  "5M": "5min",
-  "15M": "15min",
-  "1H": "1h",
-  "4H": "4h"
-};
-
-// =====================================================
-// SETTINGS
-// =====================================================
-
-const CACHE_TIME = 60 * 1000;
-
-const marketCache = new Map();
-
-// IMPORTANT:
-// Stores the EXACT result produced by Scan Markets.
-// Analyze Selected reads from this object instead
-// of calculating another signal.
-const scannerResults = new Map();
-
-let scanRunning = false;
-let currentSignal = null;
-
-// =====================================================
-// PAGE TEXT CLEANUP
-// =====================================================
-
-function cleanOldDemoText() {
-
-  document.querySelectorAll(".demo").forEach(el => {
-    el.textContent = "● LIVE MARKET DATA";
-  });
-
-  const signal = document.querySelector("#signal");
-
-  if (signal) {
-
-    const paragraph = signal.querySelector("p");
-
-    if (paragraph) {
-      paragraph.textContent =
-        "Live market data analyzed using market structure, FVG, liquidity, momentum and Order Blocks.";
-    }
-  }
-
-  const footer = document.querySelector("footer");
-
-  if (footer) {
-    footer.textContent =
-      "MOGRI AI • LIVE MARKET DATA • SIGNAL ANALYSIS";
-  }
-
-  // Remove old trading controls
-  const oldMode =
-    document.querySelector("#mogriModeWrapper");
-
-  if (oldMode) {
-    oldMode.remove();
-  }
-
-  const oldTradeButton =
-    document.querySelector("#mogriPlaceTrade");
-
-  if (oldTradeButton) {
-    oldTradeButton.remove();
-  }
-}
-
-// =====================================================
-// STATUS
-// =====================================================
-
-function setStatus(
-  message = "● LIVE MARKET DATA"
-) {
-
-  document.querySelectorAll(".demo").forEach(el => {
-    el.textContent = message;
-  });
-}
-
-// =====================================================
-// LIVE CLOCK
-// =====================================================
-
-function updateLiveClock() {
-
-  const now = new Date();
-
-  const time =
-    now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit"
-    });
-
-  document
-    .querySelectorAll(
-      "#clock, #time, .clock, .time, .current-time"
-    )
-    .forEach(el => {
-      el.textContent = time;
-    });
-}
-
-function startLiveClock() {
-
-  updateLiveClock();
-
-  setInterval(
-    updateLiveClock,
-    1000
-  );
-}
-
-// =====================================================
-// PRICE FORMAT
-// =====================================================
-
-function fmt(
-  value,
-  pair
-) {
-
-  if (
-    value === undefined ||
-    value === null ||
-    !Number.isFinite(
-      Number(value)
-    )
-  ) {
-    return "—";
-  }
-
-  if (
-    pair === "XAU/USD"
-  ) {
-    return Number(value).toFixed(2);
-  }
-
-  return Number(value).toFixed(5);
-}
-
-// =====================================================
-// CONDITION HELPER
-// =====================================================
-
-function conditionExists(value) {
-
-  if (
-    value === undefined ||
-    value === null ||
-    value === false
-  ) {
-    return false;
-  }
-
-  if (
-    typeof value === "string"
-  ) {
-
-    const normalized =
-      value
-        .trim()
-        .toUpperCase();
-
-    if (
-      normalized === "" ||
-      normalized === "NONE" ||
-      normalized === "NEUTRAL" ||
-      normalized === "NO" ||
-      normalized === "FALSE"
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// =====================================================
-// CACHE
-// =====================================================
-
-function cacheKey(
-  pair,
-  tf
-) {
-
-  return `${pair}_${tf}`;
-}
-
-function getCached(
-  pair,
-  tf
-) {
-
-  const key =
-    cacheKey(
-      pair,
-      tf
-    );
-
-  const item =
-    marketCache.get(key);
-
-  if (!item) {
-    return null;
-  }
-
-  const age =
-    Date.now() -
-    item.time;
-
-  if (
-    age > CACHE_TIME
-  ) {
-
-    marketCache.delete(key);
-
-    return null;
-  }
-
-  return item.data;
-}
-
-function saveCache(
-  pair,
-  tf,
-  data
-) {
-
-  marketCache.set(
-    cacheKey(
-      pair,
-      tf
-    ),
-    {
-      time: Date.now(),
-      data
-    }
-  );
-}
-
-// =====================================================
-// SCANNER RESULT STORAGE
-// =====================================================
-
-function saveScannerResult(
-  data
-) {
-
-  if (
-    !data ||
-    !data.pair
-  ) {
-    return;
-  }
-
-  // Store the COMPLETE API response.
-  scannerResults.set(
-    data.pair,
-    {
-      savedAt: Date.now(),
-      data: {
-        ...data
-      }
-    }
-  );
-
-  // Also expose it globally for debugging.
-  window.mogriScannerResults =
-    Object.fromEntries(
-      scannerResults
-    );
-
-  console.log(
-    "Saved exact scanner result:",
-    data.pair,
-    data.signal,
-    data.confidence,
-    data.entryLow,
-    data.entryHigh,
-    data.sl,
-    data.tp1,
-    data.tp2,
-    data.tp3
-  );
-}
-
-function getScannerResult(
-  pair
-) {
-
-  const item =
-    scannerResults.get(pair);
-
-  if (!item) {
-    return null;
-  }
-
-  const age =
-    Date.now() -
-    item.savedAt;
-
-  if (
-    age > CACHE_TIME
-  ) {
-
-    scannerResults.delete(pair);
-
-    return null;
-  }
-
-  return {
-    ...item.data
-  };
-}
-
-// =====================================================
-// API RESPONSE
-// =====================================================
-
-async function parseResponse(
-  response,
-  fallbackMessage
-) {
-
-  let data;
-
+export default async function handler(req, res) {
   try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    data =
-      await response.json();
+    if (req.method === "OPTIONS") {
+      return res.status(200).json({ ok: true });
+    }
 
-  } catch {
+    const apiKey = process.env.TWELVE_DATA_API_KEY;
 
-    throw new Error(
-      "Invalid response from market server."
-    );
-  }
+    if (!apiKey) {
+      return res.status(500).json({
+        ok: false,
+        error: "TWELVE_DATA_API_KEY is missing in Vercel environment variables.",
+        type: "CONFIG_ERROR"
+      });
+    }
 
-  if (
-    !response.ok ||
-    data.error
-  ) {
+    const symbol = String(req.query?.symbol || "EUR/USD").trim();
+    const interval = String(req.query?.interval || "15min").trim();
+    const mtf = String(req.query?.mtf || "false").toLowerCase() === "true";
 
-    throw new Error(
-      data.error ||
-      fallbackMessage
-    );
-  }
+    const allowedIntervals = ["5min", "15min", "1h", "4h"];
 
-  return data;
-}
+    if (!allowedIntervals.includes(interval) && !mtf) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid interval.",
+        allowed: allowedIntervals
+      });
+    }
 
-// =====================================================
-// SINGLE TIMEFRAME ANALYSIS
-// SCANNER USES 15M
-// =====================================================
+    const allowedSymbols = [
+      "EUR/USD",
+      "GBP/USD",
+      "USD/JPY",
+      "XAU/USD",
+      "USD/CAD",
+      "AUD/USD"
+    ];
 
-async function analyze(
-  pair,
-  tf
-) {
+    if (!allowedSymbols.includes(symbol)) {
+      return res.status(400).json({
+        ok: false,
+        error: "Invalid symbol.",
+        allowed: allowedSymbols
+      });
+    }
 
-  const interval =
-    tfMap[tf] ||
-    "15min";
+    // ---------------------------------------------------------
+    // TWELVE DATA FETCH
+    // ---------------------------------------------------------
 
-  const cached =
-    getCached(
-      pair,
-      tf
-    );
-
-  if (cached) {
-    return cached;
-  }
-
-  const key =
-    cacheKey(
-      pair,
-      tf
-    );
-
-  const loadingKey =
-    `${key}_loading`;
-
-  if (
-    marketCache.has(
-      loadingKey
-    )
-  ) {
-
-    return await marketCache.get(
-      loadingKey
-    );
-  }
-
-  const request =
-    fetch(
-      `/api/market?symbol=${encodeURIComponent(
-        pair
-      )}&interval=${encodeURIComponent(
-        interval
-      )}`
-    )
-      .then(response =>
-        parseResponse(
-          response,
-          "Failed to load live market data."
-        )
-      )
-      .then(data => {
-
-        saveCache(
-          pair,
-          tf,
-          data
-        );
-
-        return data;
-      })
-      .finally(() => {
-
-        marketCache.delete(
-          loadingKey
-        );
+    async function getCandles(pair, tf) {
+      const params = new URLSearchParams({
+        symbol: pair,
+        interval: tf,
+        outputsize: "100",
+        apikey: apiKey
       });
 
-  marketCache.set(
-    loadingKey,
-    request
-  );
+      const url = `https://api.twelvedata.com/time_series?${params.toString()}`;
 
-  return await request;
-}
+      const response = await fetch(url);
+      const text = await response.text();
 
-// =====================================================
-// SIGNAL CLASS
-// =====================================================
-
-function signalClass(
-  signal
-) {
-
-  if (
-    signal === "BUY"
-  ) {
-    return "buy";
-  }
-
-  if (
-    signal === "SELL"
-  ) {
-    return "sell";
-  }
-
-  return "wait";
-}
-
-// =====================================================
-// SIGNAL REASONS
-// =====================================================
-
-function buildReasons(
-  data
-) {
-
-  const reasons = [];
-
-  if (
-    conditionExists(
-      data.structure
-    )
-  ) {
-
-    reasons.push(
-      `Market structure: ${data.structure}`
-    );
-  }
-
-  if (
-    conditionExists(
-      data.bos
-    )
-  ) {
-
-    reasons.push(
-      `BOS/CHoCH: ${data.bos}`
-    );
-  }
-
-  if (
-    conditionExists(
-      data.liquidity
-    )
-  ) {
-
-    reasons.push(
-      `Liquidity: ${data.liquidity}`
-    );
-  }
-
-  if (
-    conditionExists(
-      data.fvg
-    )
-  ) {
-
-    reasons.push(
-      `FVG: ${data.fvg}`
-    );
-  }
-
-  if (
-    conditionExists(
-      data.momentum
-    )
-  ) {
-
-    reasons.push(
-      `Momentum: ${data.momentum}`
-    );
-  }
-
-  if (
-    conditionExists(
-      data.obType
-    )
-  ) {
-
-    reasons.push(
-      `Order Block: ${data.obType}`
-    );
-  }
-
-  if (
-    conditionExists(
-      data.obStatus
-    )
-  ) {
-
-    reasons.push(
-      `OB status: ${data.obStatus}`
-    );
-  }
-
-  return reasons;
-}
-
-// =====================================================
-// TRADE LEVELS
-// =====================================================
-
-function levelsHTML(
-  data
-) {
-
-  const signal =
-    data.signal;
-
-  if (
-    signal !== "BUY" &&
-    signal !== "SELL"
-  ) {
-
-    return `
-      <div
-        style="
-          margin-top:16px;
-          padding:14px;
-          border-radius:10px;
-          background:rgba(255,255,255,.025);
-          border:1px solid rgba(255,255,255,.06);
-        "
-      >
-
-        <b>
-          WAITING FOR CLEAN SETUP
-        </b>
-
-        <div
-          class="muted"
-          style="margin-top:6px"
-        >
-          No confirmed entry, stop loss or
-          take-profit levels yet.
-        </div>
-
-      </div>
-    `;
-  }
-
-  return `
-    <div
-      style="
-        margin-top:16px;
-        padding:14px;
-        border-radius:10px;
-        background:rgba(255,255,255,.025);
-        border:1px solid rgba(255,255,255,.06);
-      "
-    >
-
-      <b>
-        TRADE LEVELS
-      </b>
-
-      <div
-        style="
-          display:grid;
-          grid-template-columns:
-            repeat(2,minmax(0,1fr));
-          gap:10px;
-          margin-top:12px;
-        "
-      >
-
-        <div>
-          <small>
-            ENTRY ZONE
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              data.entryLow,
-              data.pair
-            )}
-            -
-            ${fmt(
-              data.entryHigh,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            STOP LOSS
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              data.sl,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            TAKE PROFIT 1
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              data.tp1,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            TAKE PROFIT 2
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              data.tp2,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            TAKE PROFIT 3
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              data.tp3,
-              data.pair
-            )}
-          </b>
-        </div>
-
-      </div>
-
-      <div
-        class="muted"
-        style="margin-top:12px"
-      >
-        These are the exact levels returned by
-        the MOGRI market analysis.
-      </div>
-
-      <div
-        class="muted"
-        style="margin-top:6px"
-      >
-        Execute orders manually through your
-        broker or MT5.
-      </div>
-
-    </div>
-  `;
-}
-
-// =====================================================
-// ANALYSIS DETAILS
-// =====================================================
-
-function analysisDetailsHTML(
-  data
-) {
-
-  const reasons =
-    buildReasons(
-      data
-    );
-
-  return `
-    <div
-      style="
-        margin-top:16px;
-        padding:14px;
-        border-radius:10px;
-        background:rgba(255,255,255,.025);
-        border:1px solid rgba(255,255,255,.06);
-      "
-    >
-
-      <b>
-        MARKET ANALYSIS
-      </b>
-
-      <div
-        style="
-          display:grid;
-          grid-template-columns:
-            repeat(2,minmax(0,1fr));
-          gap:10px;
-          margin-top:12px;
-        "
-      >
-
-        <div>
-          <small>
-            PRICE
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              data.price,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            TIMEFRAME
-          </small>
-          <br>
-          <b>
-            ${data.tf || "15M"}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            STRUCTURE
-          </small>
-          <br>
-          <b>
-            ${data.structure || "NEUTRAL"}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            BOS / CHOCH
-          </small>
-          <br>
-          <b>
-            ${data.bos || "NONE"}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            LIQUIDITY
-          </small>
-          <br>
-          <b>
-            ${data.liquidity || "NONE"}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            FVG
-          </small>
-          <br>
-          <b>
-            ${data.fvg || "NONE"}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            MOMENTUM
-          </small>
-          <br>
-          <b>
-            ${data.momentum || "NEUTRAL"}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            ORDER BLOCK
-          </small>
-          <br>
-          <b>
-            ${data.obType || "NONE"}
-          </b>
-        </div>
-
-      </div>
-
-      <div
-        style="
-          margin-top:14px;
-        "
-      >
-
-        <b>
-          CONFIRMATIONS
-        </b>
-
-        ${
-          reasons.length
-            ? `
-              <ul
-                style="
-                  margin-top:8px;
-                  padding-left:20px;
-                "
-              >
-
-                ${reasons
-                  .map(
-                    reason =>
-                      `<li style="margin-bottom:5px">${reason}</li>`
-                  )
-                  .join("")}
-
-              </ul>
-            `
-            : `
-              <div
-                class="muted"
-                style="margin-top:7px"
-              >
-                Waiting for stronger
-                market confirmation.
-              </div>
-            `
-        }
-
-      </div>
-
-    </div>
-  `;
-}
-
-// =====================================================
-// ORDER BLOCK
-// =====================================================
-
-function orderBlockHTML(
-  data
-) {
-
-  const type =
-    data.obType ||
-    "NONE";
-
-  const status =
-    data.obStatus ||
-    "NONE";
-
-  const high =
-    data.obHigh ??
-    null;
-
-  const low =
-    data.obLow ??
-    null;
-
-  const strength =
-    data.obStrength ??
-    null;
-
-  const hasOB =
-    type === "BULLISH OB" ||
-    type === "BEARISH OB";
-
-  let message =
-    "No confirmed Order Block";
-
-  if (hasOB) {
-
-    if (
-      status === "IN_ZONE"
-    ) {
-
-      message =
-        "PRICE INSIDE ORDER BLOCK";
-
-    } else if (
-      status === "ABOVE_ZONE" ||
-      status === "BELOW_ZONE"
-    ) {
-
-      message =
-        "WAITING FOR OB RETEST";
-
-    } else if (
-      status === "AWAY"
-    ) {
-
-      message =
-        "ORDER BLOCK AWAY FROM PRICE";
-
-    } else {
-
-      message =
-        "ORDER BLOCK DETECTED";
-    }
-  }
-
-  return `
-    <div
-      style="
-        margin-top:14px;
-        padding:12px;
-        border-radius:10px;
-        border:1px solid rgba(255,255,255,.08);
-        background:rgba(255,255,255,.025);
-      "
-    >
-
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          gap:10px;
-          margin-bottom:10px;
-        "
-      >
-
-        <b>
-          ORDER BLOCK
-        </b>
-
-        <span
-          class="pill ${
-            type === "BULLISH OB"
-              ? "buy"
-              : type === "BEARISH OB"
-              ? "sell"
-              : "wait"
-          }"
-        >
-          ${hasOB ? type : "NONE"}
-        </span>
-
-      </div>
-
-      <div
-        style="
-          display:grid;
-          grid-template-columns:
-            repeat(2,minmax(0,1fr));
-          gap:9px;
-        "
-      >
-
-        <div>
-          <small>
-            OB HIGH
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              high,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            OB LOW
-          </small>
-          <br>
-          <b>
-            ${fmt(
-              low,
-              data.pair
-            )}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            STATUS
-          </small>
-          <br>
-          <b>
-            ${status}
-          </b>
-        </div>
-
-        <div>
-          <small>
-            STRENGTH
-          </small>
-          <br>
-          <b>
-            ${
-              strength === null ||
-              strength === undefined
-                ? "—"
-                : strength
-            }
-          </b>
-        </div>
-
-      </div>
-
-      <div
-        class="muted"
-        style="margin-top:10px"
-      >
-        ${message}
-      </div>
-
-    </div>
-  `;
-}
-
-// =====================================================
-// SCANNER CARD
-// =====================================================
-
-function card(
-  data
-) {
-
-  const signal =
-    data.signal ||
-    "WAIT";
-
-  const className =
-    signalClass(
-      signal
-    );
-
-  const confidence =
-    Number(
-      data.confidence || 0
-    );
-
-  const obType =
-    data.obType ||
-    "NONE";
-
-  const obStatus =
-    data.obStatus ||
-    "NONE";
-
-  return `
-    <div
-      class="card"
-      data-pair="${data.pair}"
-    >
-
-      <div class="pairrow">
-
-        <b>
-          ${data.pair}
-        </b>
-
-        <span
-          class="pill ${className}"
-        >
-          ${signal}
-        </span>
-
-      </div>
-
-      <h3>
-        ${confidence}%
-
-        <span
-          style="
-            font-size:11px;
-            color:#748092;
-          "
-        >
-          confidence
-        </span>
-      </h3>
-
-      <div class="bar">
-
-        <i
-          style="
-            width:${Math.min(
-              confidence,
-              100
-            )}%
-          "
-        ></i>
-
-      </div>
-
-      <div class="mini">
-
-        <span>
-          ${data.tf || "15min"}
-        </span>
-
-        <span>
-
-          FVG
-          ${
-            conditionExists(
-              data.fvg
-            )
-              ? "✓"
-              : "—"
-          }
-
-          •
-
-          LIQ
-          ${
-            conditionExists(
-              data.liquidity
-            )
-              ? "✓"
-              : "—"
-          }
-
-        </span>
-
-      </div>
-
-      <div
-        class="mini"
-        style="margin-top:7px"
-      >
-
-        <span>
-          Structure:
-          ${data.structure || "NEUTRAL"}
-        </span>
-
-        <span>
-          BOS:
-          ${data.bos || "NONE"}
-        </span>
-
-      </div>
-
-      <div
-        class="mini"
-        style="margin-top:7px"
-      >
-
-        <span>
-          OB:
-          ${obType}
-        </span>
-
-        <span>
-          ${obStatus}
-        </span>
-
-      </div>
-
-      ${
-        signal === "BUY" ||
-        signal === "SELL"
-          ? `
-            <div
-              class="mini"
-              style="
-                margin-top:9px;
-                display:block;
-              "
-            >
-              Entry:
-              <b>
-                ${fmt(
-                  data.entryLow,
-                  data.pair
-                )}
-                -
-                ${fmt(
-                  data.entryHigh,
-                  data.pair
-                )}
-              </b>
-            </div>
-          `
-          : ""
-      }
-
-    </div>
-  `;
-}
-
-// =====================================================
-// SHOW SIGNAL
-// =====================================================
-
-function show(
-  data
-) {
-
-  currentSignal =
-    data;
-
-  window.mogriCurrentSignal =
-    data;
-
-  const signalBox =
-    document.querySelector(
-      "#signal"
-    );
-
-  if (!signalBox) {
-    return;
-  }
-
-  const signal =
-    data.signal ||
-    "WAIT";
-
-  const confidence =
-    Number(
-      data.confidence || 0
-    );
-
-  const className =
-    signalClass(
-      signal
-    );
-
-  const signalTime =
-    data.time
-      ? String(data.time)
-      : new Date().toISOString();
-
-  signalBox.classList.remove(
-    "empty"
-  );
-
-  signalBox.innerHTML = `
-
-    <div class="signal-top">
-
-      <span
-        class="pill ${className}"
-      >
-        ${signal}
-      </span>
-
-      <span id="time">
-        ${signalTime}
-      </span>
-
-    </div>
-
-    <h2>
-      ${data.pair || "Market"}
-      •
-      ${signal}
-    </h2>
-
-    <div
-      style="
-        font-size:28px;
-        font-weight:800;
-        margin-top:8px;
-      "
-    >
-      ${confidence}%
-    </div>
-
-    <div
-      class="muted"
-      style="margin-top:3px"
-    >
-      Signal confidence
-    </div>
-
-    <div
-      style="
-        margin-top:14px;
-        padding:10px 12px;
-        border-radius:8px;
-        background:rgba(200,255,0,.06);
-        border:1px solid rgba(200,255,0,.12);
-      "
-    >
-
-      <b>
-        ● LIVE MARKET DATA
-      </b>
-
-      <div
-        class="muted"
-        style="margin-top:4px"
-      >
-        MOGRI AI is analyzing current
-        market conditions.
-      </div>
-
-    </div>
-
-    ${levelsHTML(data)}
-
-    ${analysisDetailsHTML(data)}
-
-    ${orderBlockHTML(data)}
-
-    <div
-      class="muted"
-      style="
-        margin-top:14px;
-        font-size:12px;
-      "
-    >
-      Signal is analytical only.
-      Place any order manually through
-      your broker or MT5.
-    </div>
-
-  `;
-
-  addHistory(
-    data
-  );
-}
-
-// =====================================================
-// HISTORY
-// =====================================================
-
-function getHistory() {
-
-  try {
-
-    return JSON.parse(
-      localStorage.getItem(
-        "mogriSignalHistory"
-      ) || "[]"
-    );
-
-  } catch {
-
-    return [];
-  }
-}
-
-function saveHistory(
-  history
-) {
-
-  localStorage.setItem(
-    "mogriSignalHistory",
-    JSON.stringify(
-      history
-    )
-  );
-}
-
-function addHistory(
-  data
-) {
-
-  const history =
-    getHistory();
-
-  const item = {
-
-    pair:
-      data.pair,
-
-    signal:
-      data.signal,
-
-    confidence:
-      data.confidence,
-
-    price:
-      data.price,
-
-    entryLow:
-      data.entryLow,
-
-    entryHigh:
-      data.entryHigh,
-
-    sl:
-      data.sl,
-
-    tp1:
-      data.tp1,
-
-    tp2:
-      data.tp2,
-
-    tp3:
-      data.tp3,
-
-    time:
-      data.time ||
-      new Date().toISOString()
-  };
-
-  const duplicate =
-    history.length > 0 &&
-    history[0].pair ===
-      item.pair &&
-    history[0].signal ===
-      item.signal &&
-    history[0].time ===
-      item.time;
-
-  if (!duplicate) {
-    history.unshift(
-      item
-    );
-  }
-
-  saveHistory(
-    history.slice(
-      0,
-      20
-    )
-  );
-
-  renderHistory();
-}
-
-function renderHistory() {
-
-  const container =
-    document.querySelector(
-      "#history"
-    );
-
-  if (!container) {
-    return;
-  }
-
-  const history =
-    getHistory();
-
-  if (!history.length) {
-
-    container.innerHTML = `
-      <div
-        class="muted"
-        style="padding:12px 0"
-      >
-        No signals analyzed yet.
-      </div>
-    `;
-
-    return;
-  }
-
-  container.innerHTML =
-    history
-      .map(
-        item => `
-
-          <div
-            style="
-              display:grid;
-              grid-template-columns:
-                1fr auto auto;
-              gap:10px;
-              align-items:center;
-              padding:11px 0;
-              border-bottom:
-                1px solid rgba(255,255,255,.05);
-            "
-          >
-
-            <div>
-
-              <b>
-                ${item.pair}
-              </b>
-
-              <div
-                class="muted"
-                style="font-size:11px"
-              >
-                ${
-                  new Date(
-                    item.time
-                  ).toLocaleString()
-                }
-              </div>
-
-            </div>
-
-            <span
-              class="pill ${signalClass(
-                item.signal
-              )}"
-            >
-              ${item.signal}
-            </span>
-
-            <b>
-              ${Number(
-                item.confidence || 0
-              )}%
-            </b>
-
-          </div>
-
-        `
-      )
-      .join("");
-}
-
-// =====================================================
-// SCANNER STATS
-// =====================================================
-
-function setScannerStats(
-  scanned,
-  setups,
-  confidence
-) {
-
-  const scannedEl =
-    document.querySelector(
-      "#scanned"
-    );
-
-  const setupsEl =
-    document.querySelector(
-      "#setups"
-    );
-
-  const confidenceEl =
-    document.querySelector(
-      "#confidence"
-    );
-
-  if (scannedEl) {
-    scannedEl.textContent =
-      scanned;
-  }
-
-  if (setupsEl) {
-    setupsEl.textContent =
-      setups;
-  }
-
-  if (confidenceEl) {
-    confidenceEl.textContent =
-      confidence;
-  }
-}
-
-// =====================================================
-// SCAN MARKETS
-// =====================================================
-
-async function scan() {
-
-  if (scanRunning) {
-    return;
-  }
-
-  scanRunning =
-    true;
-
-  // Clear previous scanner results.
-  scannerResults.clear();
-
-  const button =
-    document.querySelector(
-      "#scan"
-    );
-
-  const marketsBox =
-    document.querySelector(
-      "#markets"
-    );
-
-  if (button) {
-
-    button.disabled =
-      true;
-
-    button.textContent =
-      "Scanning live data...";
-  }
-
-  setStatus(
-    "● LIVE MARKET DATA • SCANNING"
-  );
-
-  if (marketsBox) {
-    marketsBox.innerHTML =
-      "";
-  }
-
-  let results = [];
-
-  let setups = 0;
-
-  const confidenceValues =
-    [];
-
-  try {
-
-    // =================================================
-    // IMPORTANT:
-    // Scanner uses 15M.
-    // One Twelve Data request per market.
-    //
-    // The COMPLETE result is saved.
-    // Analyze Selected will use this exact result.
-    // =================================================
-
-    for (
-      const pair of markets
-    ) {
+      let data;
 
       try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error("Twelve Data returned an invalid JSON response.");
+      }
 
-        const data =
-          await analyze(
-            pair,
-            "15M"
-          );
-
-        // ---------------------------------------------
-        // SAVE EXACT SCANNER RESULT
-        // ---------------------------------------------
-
-        saveScannerResult(
-          data
+      if (!response.ok) {
+        throw new Error(
+          `Twelve Data HTTP ${response.status}: ${
+            data?.message || "Unknown API error"
+          }`
         );
+      }
 
-        results.push(
-          data
-        );
+      if (data?.status === "error") {
+        const message = data?.message || "Twelve Data API error.";
 
         if (
-          data.signal === "BUY" ||
-          data.signal === "SELL"
+          /limit|quota|credit|rate/i.test(message)
         ) {
-
-          setups++;
+          const error = new Error(message);
+          error.code = "API_LIMIT";
+          throw error;
         }
 
-        if (
-          Number.isFinite(
-            Number(
-              data.confidence
-            )
-          )
-        ) {
+        const error = new Error(message);
+        error.code = "TWELVE_DATA_ERROR";
+        throw error;
+      }
 
-          confidenceValues.push(
-            Number(
-              data.confidence
-            )
-          );
-        }
+      if (!Array.isArray(data?.values) || data.values.length < 20) {
+        const error = new Error(
+          "Twelve Data returned insufficient candle data."
+        );
+        error.code = "NO_CANDLE_DATA";
+        throw error;
+      }
 
-        if (marketsBox) {
+      return data.values
+        .map(c => ({
+          time: c.datetime,
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close),
+          volume: Number(c.volume || 0)
+        }))
+        .filter(
+          c =>
+            Number.isFinite(c.open) &&
+            Number.isFinite(c.high) &&
+            Number.isFinite(c.low) &&
+            Number.isFinite(c.close)
+        )
+        .reverse();
+    }
 
-          marketsBox.insertAdjacentHTML(
-            "beforeend",
-            card(data)
-          );
-        }
+    // ---------------------------------------------------------
+    // BASIC HELPERS
+    // ---------------------------------------------------------
 
-      } catch (
-        error
+    const last = arr => arr[arr.length - 1];
+
+    const previous = arr => arr[arr.length - 2];
+
+    function body(c) {
+      return Math.abs(c.close - c.open);
+    }
+
+    function bullish(c) {
+      return c.close > c.open;
+    }
+
+    function bearish(c) {
+      return c.close < c.open;
+    }
+
+    function average(values) {
+      if (!values.length) return 0;
+      return values.reduce((a, b) => a + b, 0) / values.length;
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function roundPrice(value, price) {
+      if (!Number.isFinite(value)) return null;
+
+      let decimals = 5;
+
+      if (price >= 1000) decimals = 2;
+      else if (price >= 100) decimals = 3;
+      else if (price >= 10) decimals = 3;
+      else if (price >= 1) decimals = 5;
+      else decimals = 5;
+
+      return Number(value.toFixed(decimals));
+    }
+
+    // ---------------------------------------------------------
+    // ATR
+    // ---------------------------------------------------------
+
+    function calculateATR(candles, period = 14) {
+      if (candles.length < period + 1) return 0;
+
+      const trs = [];
+
+      for (let i = 1; i < candles.length; i++) {
+        const c = candles[i];
+        const p = candles[i - 1];
+
+        const tr = Math.max(
+          c.high - c.low,
+          Math.abs(c.high - p.close),
+          Math.abs(c.low - p.close)
+        );
+
+        trs.push(tr);
+      }
+
+      return average(trs.slice(-period));
+    }
+
+    // ---------------------------------------------------------
+    // MARKET STRUCTURE
+    // ---------------------------------------------------------
+
+    function detectStructure(candles) {
+      const recent = candles.slice(-30);
+
+      if (recent.length < 10) {
+        return {
+          direction: "NEUTRAL",
+          label: "NEUTRAL",
+          strength: 0
+        };
+      }
+
+      const highs = recent.map(c => c.high);
+      const lows = recent.map(c => c.low);
+
+      const midpoint = Math.floor(recent.length / 2);
+
+      const oldHigh = Math.max(...highs.slice(0, midpoint));
+      const newHigh = Math.max(...highs.slice(midpoint));
+
+      const oldLow = Math.min(...lows.slice(0, midpoint));
+      const newLow = Math.min(...lows.slice(midpoint));
+
+      const price = last(candles).close;
+
+      let direction = "NEUTRAL";
+      let strength = 0;
+
+      if (newHigh > oldHigh && newLow > oldLow) {
+        direction = "BULLISH";
+        strength = 2;
+      } else if (newHigh < oldHigh && newLow < oldLow) {
+        direction = "BEARISH";
+        strength = 2;
+      } else if (price > oldHigh) {
+        direction = "BULLISH";
+        strength = 1;
+      } else if (price < oldLow) {
+        direction = "BEARISH";
+        strength = 1;
+      }
+
+      return {
+        direction,
+        label: direction,
+        strength
+      };
+    }
+
+    // ---------------------------------------------------------
+    // BOS / CHOCH
+    // ---------------------------------------------------------
+
+    function detectBOS(candles) {
+      if (candles.length < 12) {
+        return {
+          type: "NONE",
+          direction: "NEUTRAL",
+          strength: 0
+        };
+      }
+
+      const current = last(candles);
+      const previousCandles = candles.slice(-12, -1);
+
+      const recentHigh = Math.max(
+        ...previousCandles.map(c => c.high)
+      );
+
+      const recentLow = Math.min(
+        ...previousCandles.map(c => c.low)
+      );
+
+      if (current.close > recentHigh) {
+        return {
+          type: "BOS",
+          direction: "BULLISH",
+          strength: 2
+        };
+      }
+
+      if (current.close < recentLow) {
+        return {
+          type: "BOS",
+          direction: "BEARISH",
+          strength: 2
+        };
+      }
+
+      return {
+        type: "NONE",
+        direction: "NEUTRAL",
+        strength: 0
+      };
+    }
+
+    // ---------------------------------------------------------
+    // LIQUIDITY SWEEP
+    // ---------------------------------------------------------
+
+    function detectLiquidity(candles) {
+      if (candles.length < 12) {
+        return {
+          type: "NONE",
+          direction: "NEUTRAL",
+          strength: 0
+        };
+      }
+
+      const current = last(candles);
+      const previousCandles = candles.slice(-12, -1);
+
+      const previousHigh = Math.max(
+        ...previousCandles.map(c => c.high)
+      );
+
+      const previousLow = Math.min(
+        ...previousCandles.map(c => c.low)
+      );
+
+      // High sweep then close back below
+      if (
+        current.high > previousHigh &&
+        current.close < previousHigh
       ) {
+        return {
+          type: "HIGH SWEEP",
+          direction: "BEARISH",
+          strength: 2
+        };
+      }
 
-        console.error(
-          `Scanner error for ${pair}:`,
-          error
-        );
+      // Low sweep then close back above
+      if (
+        current.low < previousLow &&
+        current.close > previousLow
+      ) {
+        return {
+          type: "LOW SWEEP",
+          direction: "BULLISH",
+          strength: 2
+        };
+      }
 
-        if (marketsBox) {
+      return {
+        type: "NONE",
+        direction: "NEUTRAL",
+        strength: 0
+      };
+    }
 
-          marketsBox.insertAdjacentHTML(
-            "beforeend",
-            `
-              <div class="card">
+    // ---------------------------------------------------------
+    // FVG
+    // ---------------------------------------------------------
 
-                <div class="pairrow">
+    function detectFVG(candles) {
+      if (candles.length < 5) {
+        return {
+          type: "NONE",
+          direction: "NEUTRAL",
+          low: null,
+          high: null,
+          strength: 0
+        };
+      }
 
-                  <b>
-                    ${pair}
-                  </b>
+      for (let i = candles.length - 1; i >= 2; i--) {
+        const a = candles[i - 2];
+        const c = candles[i];
 
-                  <span
-                    class="pill wait"
-                  >
-                    ERROR
-                  </span>
+        // Bullish FVG
+        if (c.low > a.high) {
+          return {
+            type: "BULLISH FVG",
+            direction: "BULLISH",
+            low: a.high,
+            high: c.low,
+            strength: 2
+          };
+        }
 
-                </div>
-
-                <div
-                  class="muted"
-                  style="margin-top:8px"
-                >
-                  ${error.message}
-                </div>
-
-              </div>
-            `
-          );
+        // Bearish FVG
+        if (c.high < a.low) {
+          return {
+            type: "BEARISH FVG",
+            direction: "BEARISH",
+            low: c.high,
+            high: a.low,
+            strength: 2
+          };
         }
       }
+
+      return {
+        type: "NONE",
+        direction: "NEUTRAL",
+        low: null,
+        high: null,
+        strength: 0
+      };
     }
 
-    const avg =
-      confidenceValues.length
-        ? Math.round(
-            confidenceValues.reduce(
-              (
-                a,
-                b
-              ) =>
-                a + b,
-              0
-            ) /
-            confidenceValues.length
-          ) + "%"
-        : "—";
+    // ---------------------------------------------------------
+    // MOMENTUM
+    // ---------------------------------------------------------
 
-    setScannerStats(
-      results.length,
-      setups,
-      avg
-    );
+    function detectMomentum(candles) {
+      const recent = candles.slice(-10);
 
-    setStatus(
-      "● LIVE MARKET DATA"
-    );
+      if (recent.length < 5) {
+        return {
+          direction: "NEUTRAL",
+          strength: 0
+        };
+      }
 
-    console.log(
-      "MOGRI scanner complete:",
-      results
-    );
+      const bullishCount = recent.filter(bullish).length;
+      const bearishCount = recent.filter(bearish).length;
 
-  } catch (
-    error
-  ) {
+      const lastCandle = last(candles);
+      const avgBody = average(recent.map(body));
 
-    console.error(
-      "Scanner error:",
-      error
-    );
+      if (
+        bullishCount > bearishCount &&
+        body(lastCandle) >= avgBody
+      ) {
+        return {
+          direction: "BULLISH",
+          strength: 2
+        };
+      }
 
-    setStatus(
-      "● LIVE MARKET DATA"
-    );
+      if (
+        bearishCount > bullishCount &&
+        body(lastCandle) >= avgBody
+      ) {
+        return {
+          direction: "BEARISH",
+          strength: 2
+        };
+      }
 
-    alert(
-      error.message ||
-      "Unable to scan live market data."
-    );
-
-  } finally {
-
-    scanRunning =
-      false;
-
-    if (button) {
-
-      button.disabled =
-        false;
-
-      button.textContent =
-        "↻ Scan Markets";
+      return {
+        direction: "NEUTRAL",
+        strength: 0
+      };
     }
-  }
-}
 
-// =====================================================
-// ANALYZE SELECTED
-//
-// IMPORTANT:
-// This NO LONGER calls the MTF endpoint.
-//
-// It displays the EXACT scanner result for the
-// selected pair.
-//
-// Example:
-//
-// Scanner:
-// EUR/USD SELL 92%
-//
-// Analyze Selected:
-// EUR/USD SELL 92%
-//
-// Same entry.
-// Same SL.
-// Same TP.
-// Same confidence.
-// =====================================================
+    // ---------------------------------------------------------
+    // ORDER BLOCK
+    // ---------------------------------------------------------
 
-async function analyzeSelected() {
+    function detectOrderBlock(candles) {
+      if (candles.length < 15) {
+        return {
+          type: "NONE",
+          high: null,
+          low: null,
+          time: null,
+          status: "NONE",
+          strength: 0
+        };
+      }
 
-  const pairSelect =
-    document.querySelector(
-      "#pair"
-    );
+      const atr = calculateATR(candles, 14);
 
-  const button =
-    document.querySelector(
-      "#analyze"
-    );
+      if (!atr) {
+        return {
+          type: "NONE",
+          high: null,
+          low: null,
+          time: null,
+          status: "NONE",
+          strength: 0
+        };
+      }
 
-  const signalBox =
-    document.querySelector(
-      "#signal"
-    );
+      const recent = candles.slice(-20);
 
-  const pair =
-    pairSelect
-      ? pairSelect.value
-      : "EUR/USD";
+      for (let i = recent.length - 4; i >= 1; i--) {
+        const ob = recent[i];
+        const next = recent[i + 1];
+        const after = recent[i + 2];
 
-  if (button) {
+        if (!ob || !next || !after) continue;
 
-    button.disabled =
-      true;
+        const displacement =
+          Math.abs(after.close - ob.close);
 
-    button.textContent =
-      "Loading scanner result...";
-  }
+        // Bullish order block
+        if (
+          bearish(ob) &&
+          bullish(next) &&
+          bullish(after) &&
+          after.close > ob.high &&
+          displacement >= atr * 0.5
+        ) {
+          const currentPrice = last(candles).close;
 
-  setStatus(
-    "● LIVE MARKET DATA • ANALYZING"
-  );
+          let status = "AWAY";
 
-  if (signalBox) {
+          if (
+            currentPrice >= ob.low &&
+            currentPrice <= ob.high
+          ) {
+            status = "IN_ZONE";
+          } else if (currentPrice > ob.high) {
+            status = "ABOVE_ZONE";
+          } else if (currentPrice < ob.low) {
+            status = "BELOW_ZONE";
+          }
 
-    signalBox.innerHTML = `
-      <div class="signal-top">
+          return {
+            type: "BULLISH",
+            high: ob.high,
+            low: ob.low,
+            time: ob.time,
+            status,
+            strength: 2
+          };
+        }
 
-        <span class="pill wait">
-          WAIT
-        </span>
+        // Bearish order block
+        if (
+          bullish(ob) &&
+          bearish(next) &&
+          bearish(after) &&
+          after.close < ob.low &&
+          displacement >= atr * 0.5
+        ) {
+          const currentPrice = last(candles).close;
 
-        <span id="time">
-          LIVE
-        </span>
+          let status = "AWAY";
 
-      </div>
+          if (
+            currentPrice >= ob.low &&
+            currentPrice <= ob.high
+          ) {
+            status = "IN_ZONE";
+          } else if (currentPrice > ob.high) {
+            status = "ABOVE_ZONE";
+          } else if (currentPrice < ob.low) {
+            status = "BELOW_ZONE";
+          }
 
-      <h2>
-        Loading ${pair}
-      </h2>
+          return {
+            type: "BEARISH",
+            high: ob.high,
+            low: ob.low,
+            time: ob.time,
+            status,
+            strength: 2
+          };
+        }
+      }
 
-      <p class="muted">
-        MOGRI AI is loading the exact
-        result from the latest market scan.
-      </p>
-    `;
-  }
+      return {
+        type: "NONE",
+        high: null,
+        low: null,
+        time: null,
+        status: "NONE",
+        strength: 0
+      };
+    }
 
-  try {
+    // ---------------------------------------------------------
+    // SCORE
+    // ---------------------------------------------------------
 
-    // =================================================
-    // FIRST:
-    // Use exact result from Scan Markets.
-    // =================================================
+    function calculateScore(
+      structure,
+      bos,
+      liquidity,
+      fvg,
+      momentum,
+      ob
+    ) {
+      let bull = 0;
+      let bear = 0;
 
-    let data =
-      getScannerResult(
-        pair
+      if (structure.direction === "BULLISH") {
+        bull += 25;
+      }
+
+      if (structure.direction === "BEARISH") {
+        bear += 25;
+      }
+
+      if (bos.direction === "BULLISH") {
+        bull += 20;
+      }
+
+      if (bos.direction === "BEARISH") {
+        bear += 20;
+      }
+
+      if (liquidity.direction === "BULLISH") {
+        bull += 15;
+      }
+
+      if (liquidity.direction === "BEARISH") {
+        bear += 15;
+      }
+
+      if (fvg.direction === "BULLISH") {
+        bull += 15;
+      }
+
+      if (fvg.direction === "BEARISH") {
+        bear += 15;
+      }
+
+      if (momentum.direction === "BULLISH") {
+        bull += 15;
+      }
+
+      if (momentum.direction === "BEARISH") {
+        bear += 15;
+      }
+
+      if (ob.type === "BULLISH") {
+        bull += 10;
+      }
+
+      if (ob.type === "BEARISH") {
+        bear += 10;
+      }
+
+      return {
+        bull: Math.min(bull, 100),
+        bear: Math.min(bear, 100)
+      };
+    }
+
+    // ---------------------------------------------------------
+    // TRADE LEVELS
+    // ---------------------------------------------------------
+
+    function calculateLevels(
+      candles,
+      direction,
+      ob
+    ) {
+      const price = last(candles).close;
+      const atr = calculateATR(candles, 14);
+
+      if (!atr || !["BUY", "SELL"].includes(direction)) {
+        return {
+          entryLow: null,
+          entryHigh: null,
+          sl: null,
+          tp1: null,
+          tp2: null,
+          tp3: null
+        };
+      }
+
+      let entryLow;
+      let entryHigh;
+      let sl;
+
+      if (
+        direction === "BUY" &&
+        ob.type === "BULLISH" &&
+        Number.isFinite(ob.low) &&
+        Number.isFinite(ob.high)
+      ) {
+        entryLow = ob.low;
+        entryHigh = ob.high;
+        sl = ob.low - atr * 0.20;
+      } else if (
+        direction === "SELL" &&
+        ob.type === "BEARISH" &&
+        Number.isFinite(ob.low) &&
+        Number.isFinite(ob.high)
+      ) {
+        entryLow = ob.low;
+        entryHigh = ob.high;
+        sl = ob.high + atr * 0.20;
+      } else if (direction === "BUY") {
+        entryLow = price - atr * 0.25;
+        entryHigh = price + atr * 0.10;
+        sl = entryLow - atr * 0.50;
+      } else {
+        entryLow = price - atr * 0.10;
+        entryHigh = price + atr * 0.25;
+        sl = entryHigh + atr * 0.50;
+      }
+
+      const entry =
+        direction === "BUY"
+          ? (entryLow + entryHigh) / 2
+          : (entryLow + entryHigh) / 2;
+
+      const risk = Math.abs(entry - sl);
+
+      if (!risk) {
+        return {
+          entryLow: null,
+          entryHigh: null,
+          sl: null,
+          tp1: null,
+          tp2: null,
+          tp3: null
+        };
+      }
+
+      let tp1;
+      let tp2;
+      let tp3;
+
+      if (direction === "BUY") {
+        tp1 = entry + risk;
+        tp2 = entry + risk * 2;
+        tp3 = entry + risk * 3;
+      } else {
+        tp1 = entry - risk;
+        tp2 = entry - risk * 2;
+        tp3 = entry - risk * 3;
+      }
+
+      return {
+        entryLow: roundPrice(entryLow, price),
+        entryHigh: roundPrice(entryHigh, price),
+        sl: roundPrice(sl, price),
+        tp1: roundPrice(tp1, price),
+        tp2: roundPrice(tp2, price),
+        tp3: roundPrice(tp3, price)
+      };
+    }
+
+    // ---------------------------------------------------------
+    // ANALYZE ONE TIMEFRAME
+    // ---------------------------------------------------------
+
+    function analyzeCandles(pair, tf, candles) {
+      const price = last(candles).close;
+
+      const structure = detectStructure(candles);
+      const bos = detectBOS(candles);
+      const liquidity = detectLiquidity(candles);
+      const fvg = detectFVG(candles);
+      const momentum = detectMomentum(candles);
+      const orderBlock = detectOrderBlock(candles);
+
+      const scores = calculateScore(
+        structure,
+        bos,
+        liquidity,
+        fvg,
+        momentum,
+        orderBlock
       );
 
-    // =================================================
-    // IF THE MARKET HAS NOT BEEN SCANNED YET:
-    // Make one 15M request and save it as the
-    // authoritative result.
-    // =================================================
+      let signal = "WAIT";
+      let confidence = 50;
 
-    if (!data) {
+      const lead = Math.abs(scores.bull - scores.bear);
 
-      console.log(
-        "No scanner result for",
-        pair,
-        "— requesting fresh 15M data."
-      );
-
-      data =
-        await analyze(
-          pair,
-          "15M"
+      if (
+        scores.bull >= 60 &&
+        scores.bull > scores.bear &&
+        lead >= 15
+      ) {
+        signal = "BUY";
+        confidence = clamp(
+          55 + Math.round(scores.bull * 0.40),
+          55,
+          95
         );
+      } else if (
+        scores.bear >= 60 &&
+        scores.bear > scores.bull &&
+        lead >= 15
+      ) {
+        signal = "SELL";
+        confidence = clamp(
+          55 + Math.round(scores.bear * 0.40),
+          55,
+          95
+        );
+      } else {
+        confidence = clamp(
+          40 + Math.round(lead * 0.35),
+          40,
+          64
+        );
+      }
 
-      saveScannerResult(
-        data
+      const levels = calculateLevels(
+        candles,
+        signal,
+        orderBlock
       );
+
+      return {
+        pair,
+        tf,
+        price: roundPrice(price, price),
+
+        signal,
+        confidence,
+
+        bias: structure.direction,
+
+        structure: structure.direction,
+        bos: bos.type,
+        bosDirection: bos.direction,
+
+        liquidity: liquidity.type,
+        liquidityDirection: liquidity.direction,
+
+        fvg: fvg.type,
+        fvgDirection: fvg.direction,
+
+        momentum: momentum.direction,
+
+        orderBlock,
+        obType: orderBlock.type,
+        obHigh: orderBlock.high
+          ? roundPrice(orderBlock.high, price)
+          : null,
+        obLow: orderBlock.low
+          ? roundPrice(orderBlock.low, price)
+          : null,
+        obTime: orderBlock.time,
+        obStatus: orderBlock.status,
+        obStrength: orderBlock.strength,
+
+        bullScore: scores.bull,
+        bearScore: scores.bear,
+        scoreTotal: Math.max(
+          scores.bull,
+          scores.bear
+        ),
+
+        ...levels,
+
+        time: last(candles).time,
+        candleCount: candles.length
+      };
     }
 
-    // =================================================
-    // FORCE THE DISPLAY TO USE THE SCANNER TIMEFRAME.
-    // =================================================
+    // ---------------------------------------------------------
+    // MTF ANALYSIS
+    // ---------------------------------------------------------
 
-    data = {
-      ...data,
-      tf: "15M"
-    };
+    if (mtf) {
+      const [h4, h1, m15, m5] = await Promise.all([
+        getCandles(symbol, "4h"),
+        getCandles(symbol, "1h"),
+        getCandles(symbol, "15min"),
+        getCandles(symbol, "5min")
+      ]);
 
-    // =================================================
-    // SHOW EXACT SAME RESULT.
-    // =================================================
+      const H4 = analyzeCandles(symbol, "4H", h4);
+      const H1 = analyzeCandles(symbol, "1H", h1);
+      const M15 = analyzeCandles(symbol, "15M", m15);
+      const M5 = analyzeCandles(symbol, "5M", m5);
 
-    console.log(
-      "Analyze Selected using exact scanner result:",
-      data
-    );
+      let signal = "WAIT";
+      let confidence = 50;
 
-    show(
-      data
-    );
+      const bullishAlignment =
+        H4.signal === "BUY" ||
+        H4.bias === "BULLISH";
 
-    setStatus(
-      "● LIVE MARKET DATA"
-    );
+      const bearishAlignment =
+        H4.signal === "SELL" ||
+        H4.bias === "BEARISH";
 
-  } catch (
-    error
-  ) {
+      if (
+        bullishAlignment &&
+        H1.bias === "BULLISH" &&
+        M15.bias === "BULLISH" &&
+        M5.bias === "BULLISH"
+      ) {
+        signal = "BUY";
 
-    console.error(
-      "Selected analysis error:",
-      error
-    );
+        confidence = clamp(
+          Math.round(
+            (
+              H4.confidence +
+              H1.confidence +
+              M15.confidence +
+              M5.confidence
+            ) / 4
+          ),
+          65,
+          95
+        );
+      } else if (
+        bearishAlignment &&
+        H1.bias === "BEARISH" &&
+        M15.bias === "BEARISH" &&
+        M5.bias === "BEARISH"
+      ) {
+        signal = "SELL";
 
-    setStatus(
-      "● LIVE MARKET DATA"
-    );
+        confidence = clamp(
+          Math.round(
+            (
+              H4.confidence +
+              H1.confidence +
+              M15.confidence +
+              M5.confidence
+            ) / 4
+          ),
+          65,
+          95
+        );
+      } else {
+        const scores = [
+          H4.confidence,
+          H1.confidence,
+          M15.confidence,
+          M5.confidence
+        ];
 
-    if (signalBox) {
+        confidence = clamp(
+          Math.round(average(scores)),
+          25,
+          64
+        );
+      }
 
-      signalBox.innerHTML = `
-        <div class="signal-top">
+      const levels =
+        signal === "BUY"
+          ? calculateLevels(m15, "BUY", M15.orderBlock)
+          : signal === "SELL"
+          ? calculateLevels(m15, "SELL", M15.orderBlock)
+          : {
+              entryLow: null,
+              entryHigh: null,
+              sl: null,
+              tp1: null,
+              tp2: null,
+              tp3: null
+            };
 
-          <span class="pill wait">
-            WAIT
-          </span>
+      return res.status(200).json({
+        ok: true,
+        pair: symbol,
+        tf: "MTF",
 
-          <span id="time">
-            ERROR
-          </span>
+        price: M15.price,
 
-        </div>
+        signal,
+        confidence,
 
-        <h2>
-          Live analysis unavailable
-        </h2>
+        sniper: signal !== "WAIT",
 
-        <p class="muted">
-          ${error.message}
-        </p>
+        bias: H4.bias,
 
-        <div
-          style="
-            margin-top:14px;
-            padding:12px;
-            border-radius:8px;
-            background:rgba(255,255,255,.03);
-          "
-        >
+        h4: H4,
+        h1: H1,
+        m15: M15,
+        m5: M5,
 
-          <b>
-            LIVE MARKET DATA
-          </b>
+        structure4H: H4.structure,
+        structure1H: H1.structure,
+        structure15M: M15.structure,
+        structure5M: M5.structure,
 
-          <div
-            class="muted"
-            style="margin-top:5px"
-          >
-            Check your Twelve Data quota
-            or wait for the API limit to reset.
-          </div>
+        bos4H: H4.bos,
+        bos1H: H1.bos,
+        bos15M: M15.bos,
+        bos5M: M5.bos,
 
-        </div>
-      `;
+        liquidity4H: H4.liquidity,
+        liquidity1H: H1.liquidity,
+        liquidity15M: M15.liquidity,
+        liquidity5M: M5.liquidity,
+
+        fvg4H: H4.fvg,
+        fvg1H: H1.fvg,
+        fvg15M: M15.fvg,
+        fvg5M: M5.fvg,
+
+        obType: M15.obType,
+        obHigh: M15.obHigh,
+        obLow: M15.obLow,
+        obTime: M15.obTime,
+        obStatus: M15.obStatus,
+        obStrength: M15.obStrength,
+
+        bullScore: Math.round(
+          (
+            H4.bullScore +
+            H1.bullScore +
+            M15.bullScore +
+            M5.bullScore
+          ) / 4
+        ),
+
+        bearScore: Math.round(
+          (
+            H4.bearScore +
+            H1.bearScore +
+            M15.bearScore +
+            M5.bearScore
+          ) / 4
+        ),
+
+        ...levels,
+
+        time: M15.time,
+
+        candleCount4H: h4.length,
+        candleCount1H: h1.length,
+        candleCount15M: m15.length,
+        candleCount5M: m5.length
+      });
     }
 
-  } finally {
+    // ---------------------------------------------------------
+    // SINGLE TIMEFRAME
+    // ---------------------------------------------------------
 
-    if (button) {
+    const candles = await getCandles(symbol, interval);
 
-      button.disabled =
-        false;
+    const result = analyzeCandles(
+      symbol,
+      interval,
+      candles
+    );
 
-      button.textContent =
-        "Analyze Selected";
+    return res.status(200).json({
+      ok: true,
+      ...result,
+      candles: candles.length
+    });
+
+  } catch (error) {
+    console.error("MOGRI MARKET API ERROR:", error);
+
+    const code = error?.code;
+
+    if (code === "API_LIMIT") {
+      return res.status(429).json({
+        ok: false,
+        type: "API_LIMIT",
+        error:
+          "Twelve Data API limit reached. Please wait for the quota to reset."
+      });
     }
+
+    if (code === "TWELVE_DATA_ERROR") {
+      return res.status(502).json({
+        ok: false,
+        type: "TWELVE_DATA_ERROR",
+        error: error.message
+      });
+    }
+
+    if (code === "NO_CANDLE_DATA") {
+      return res.status(502).json({
+        ok: false,
+        type: "NO_CANDLE_DATA",
+        error: error.message
+      });
+    }
+
+    return res.status(500).json({
+      ok: false,
+      type: "SERVER_ERROR",
+      error: error?.message || "Market server error."
+    });
   }
-}
-
-// =====================================================
-// INITIALIZE
-// =====================================================
-
-function initializeMogriAI() {
-
-  cleanOldDemoText();
-
-  setStatus(
-    "● LIVE MARKET DATA"
-  );
-
-  startLiveClock();
-
-  renderHistory();
-
-  const scanButton =
-    document.querySelector(
-      "#scan"
-    );
-
-  const analyzeButton =
-    document.querySelector(
-      "#analyze"
-    );
-
-  if (scanButton) {
-
-    scanButton.addEventListener(
-      "click",
-      scan
-    );
-  }
-
-  if (analyzeButton) {
-
-    analyzeButton.addEventListener(
-      "click",
-      analyzeSelected
-    );
-  }
-
-  console.log(
-    "MOGRI AI initialized — LIVE MARKET DATA"
-  );
-}
-
-// =====================================================
-// START
-// =====================================================
-
-if (
-  document.readyState ===
-  "loading"
-) {
-
-  document.addEventListener(
-    "DOMContentLoaded",
-    initializeMogriAI
-  );
-
-} else {
-
-  initializeMogriAI();
 }
